@@ -1,6 +1,6 @@
 import 'package:absensi_siswa/screens/home_screen.dart';
 import 'package:absensi_siswa/screens/profile_screen.dart';
-import 'package:absensi_siswa/screens/qr_screen.dart';
+import 'package:absensi_siswa/screens/riwayat_screen.dart';
 import 'package:flutter/material.dart';
 
 class HomePage extends StatefulWidget {
@@ -15,39 +15,68 @@ class _HomePageState extends State<HomePage> {
 
   final List<Widget> _pages = const [
     HomeScreen(),
-    QrScreen(),
+    RiwayatScreen(),
     ProfilePage(),
   ];
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: _pages[_currentIndex],
+      backgroundColor: const Color(0xFFF2F4F7),
+
+      /// ===== BODY =====
+      body: SafeArea(
+        child: _pages[_currentIndex],
+      ),
 
       /// ===== BOTTOM NAVBAR =====
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: _currentIndex,
-        onTap: (index) {
-          setState(() {
-            _currentIndex = index;
-          });
-        },
-        selectedItemColor: Colors.blue,
-        unselectedItemColor: Colors.grey,
-        items: const [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.home),
-            label: 'Home',
+      bottomNavigationBar: Container(
+        margin: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(25),
+          boxShadow: const [
+            BoxShadow(
+              color: Colors.black12,
+              blurRadius: 8,
+              offset: Offset(0, 3),
+            ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(25),
+          child: BottomNavigationBar(
+            currentIndex: _currentIndex,
+            onTap: (index) {
+              setState(() {
+                _currentIndex = index;
+              });
+            },
+
+            backgroundColor: Colors.white,
+            elevation: 0,
+
+            selectedItemColor: Colors.blue,
+            unselectedItemColor: Colors.grey,
+
+            type: BottomNavigationBarType.fixed,
+
+            items: const [
+              BottomNavigationBarItem(
+                icon: Icon(Icons.home_rounded),
+                label: 'Home',
+              ),
+              BottomNavigationBarItem(
+                icon: Icon(Icons.history),
+                label: 'Riwayat',
+              ),
+              BottomNavigationBarItem(
+                icon: Icon(Icons.person_rounded),
+                label: 'Profil',
+              ),
+            ],
           ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.qr_code_scanner),
-            label: 'QR',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.person),
-            label: 'Profil',
-          ),
-        ],
+        ),
       ),
     );
   }
