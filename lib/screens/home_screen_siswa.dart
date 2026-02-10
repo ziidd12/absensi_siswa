@@ -1,30 +1,123 @@
+import 'package:absensi_siswa/viewModels/kehadiran_viewmodel.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:mobile_scanner/mobile_scanner.dart';
+import 'package:absensi_siswa/utils/token_storage.dart';
 
-class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
+class HomeScreenSiswa extends StatefulWidget {
+  const HomeScreenSiswa({super.key});
 
   @override
-  State<HomeScreen> createState() => _HomeScreenState();
+  State<HomeScreenSiswa> createState() => _HomeScreenSiswaState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenSiswaState extends State<HomeScreenSiswa> {
+  String? _name;
+  String? _nis;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadProfile();
+  }
+
+  void _loadProfile() async {
+    final name = await TokenStorage.getUserName();
+    final nis = await TokenStorage.getUserSerialNumber();
+
+    if (!mounted) return;
+
+    setState(() {
+      _name = name;
+      _nis = nis;
+    });
+  }
+
+  // ===================== SCANNER =====================
+  void _openScanner() async {
+    final result = await Navigator.push<String>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => Scaffold(
+          appBar: AppBar(title: const Text("Scan QR Absensi")),
+          body: MobileScanner(
+            onDetect: (capture) {
+              final List<Barcode> barcodes = capture.barcodes;
+
+              if (barcodes.isNotEmpty) {
+                final String? code = barcodes.first.rawValue;
+
+                if (code != null) {
+                  Navigator.pop(context, code);
+                }
+              }
+            },
+          ),
+        ),
+      ),
+    );
+
+    if (result != null && mounted) {
+      _processAttendance(result);
+    }
+  }
+
+  // ===================== ABSENSI =====================
+  void _processAttendance(String token) async {
+    final viewModel =
+        Provider.of<KehadiranViewmodel>(context, listen: false);
+
+    final result = await viewModel.scanQR(token, 0.0, 0.0);
+
+    if (!mounted) return;
+
+    // ✅ FIX DI SINI (TANPA UBAH STRUKTUR)
+    if (result != null) {
+      _showMessage(
+        "Absen Berhasil",
+        "Absensi Anda telah tercatat.",
+      );
+    } else {
+      _showMessage(
+        "Absen Gagal",
+        viewModel.errorMessage ?? "Token tidak valid.",
+      );
+    }
+  }
+
+  // ===================== NOTIF + AUTO BACK =====================
+  void _showMessage(String title, String msg) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(title),
+        content: Text(msg),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.of(dialogContext)
+                  .popUntil((route) => route.isFirst);
+            },
+            child: const Text("OK"),
+          )
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.transparent,
-
       body: Container(
         decoration: const BoxDecoration(
           gradient: LinearGradient(
-            colors: [
-              Color(0xFFE3F2FD), // Biru muda atas
-              Color(0xFFFFFFFF), // Putih bawah
-            ],
+            colors: [Color(0xFFE3F2FD), Color(0xFFFFFFFF)],
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
           ),
         ),
-
         child: SafeArea(
           child: SingleChildScrollView(
             child: Column(
@@ -45,30 +138,27 @@ class _HomeScreenState extends State<HomeScreen> {
                           color: Colors.black.withOpacity(0.1),
                           blurRadius: 8,
                           offset: const Offset(0, 3),
-                        ),
+                        )
                       ],
                     ),
                     child: Row(
-                      children: const [
-                        CircleAvatar(
+                      children: [
+                        const CircleAvatar(
                           backgroundColor: Colors.blue,
                           child: Icon(Icons.person, color: Colors.white),
                         ),
-                        SizedBox(width: 12),
-
+                        const SizedBox(width: 12),
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              "Ahmad Zidan",
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 16,
-                              ),
+                              _name ?? "Loading...",
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.bold, fontSize: 16),
                             ),
                             Text(
-                              "NIS : 123456789",
-                              style: TextStyle(color: Colors.grey),
+                              "NIS : ${_nis ?? '-'}",
+                              style: const TextStyle(color: Colors.grey),
                             ),
                           ],
                         )
@@ -86,10 +176,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     padding: const EdgeInsets.all(20),
                     decoration: BoxDecoration(
                       gradient: const LinearGradient(
-                        colors: [
-                          Color(0xFF2196F3),
-                          Color(0xFF64B5F6),
-                        ],
+                        colors: [Color(0xFF2196F3), Color(0xFF64B5F6)],
                       ),
                       borderRadius: BorderRadius.circular(20),
                       boxShadow: [
@@ -97,7 +184,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           color: Colors.blue.withOpacity(0.3),
                           blurRadius: 8,
                           offset: const Offset(0, 4),
-                        ),
+                        )
                       ],
                     ),
                     child: Column(
@@ -109,26 +196,20 @@ class _HomeScreenState extends State<HomeScreen> {
                             const Text(
                               "Jadwal XII RPL 2 Hari Ini",
                               style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                              ),
+                                  color: Colors.white,
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold),
                             ),
-
                             Container(
                               padding: const EdgeInsets.all(6),
                               decoration: const BoxDecoration(
-                                color: Colors.white,
-                                shape: BoxShape.circle,
-                              ),
-                              child: const Icon(
-                                Icons.arrow_forward,
-                                color: Colors.blue,
-                              ),
+                                  color: Colors.white,
+                                  shape: BoxShape.circle),
+                              child: const Icon(Icons.arrow_forward,
+                                  color: Colors.blue),
                             )
                           ],
                         ),
-
                         const SizedBox(height: 16),
 
                         buildSchedule("Senam", "6.30 - 7.10"),
@@ -141,47 +222,14 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
 
-                const SizedBox(height: 20),
-
-                /// ================= KALENDER =================
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(20),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.08),
-                          blurRadius: 6,
-                        ),
-                      ],
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceAround,
-                      children: [
-                        buildDate("12", "SENIN", false),
-                        buildDate("13", "SELASA", false),
-                        buildDate("14", "RABU", true),
-                        buildDate("15", "KAMIS", false),
-                        buildDate("16", "JUMAT", false),
-                      ],
-                    ),
-                  ),
-                ),
-
                 const SizedBox(height: 24),
 
-                /// ================= REKAP =================
                 const Padding(
                   padding: EdgeInsets.symmetric(horizontal: 16),
                   child: Text(
                     "Rekap Absensi Siswa",
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
+                    style:
+                        TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                   ),
                 ),
 
@@ -207,23 +255,22 @@ class _HomeScreenState extends State<HomeScreen> {
                         ],
                       ),
 
-                      /// QR BUTTON
-                      Container(
-                        padding: const EdgeInsets.all(14),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(50),
-                          boxShadow: const [
-                            BoxShadow(
-                              blurRadius: 6,
-                              color: Colors.black26,
-                            )
-                          ],
-                        ),
-                        child: const Icon(
-                          Icons.qr_code,
-                          size: 40,
-                          color: Colors.blue,
+                      /// ================= QR BUTTON =================
+                      GestureDetector(
+                        onTap: _openScanner,
+                        child: Container(
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(50),
+                            boxShadow: const [
+                              BoxShadow(
+                                  blurRadius: 6,
+                                  color: Colors.black26)
+                            ],
+                          ),
+                          child: const Icon(Icons.qr_code_scanner,
+                              size: 40, color: Colors.blue),
                         ),
                       )
                     ],
@@ -239,60 +286,23 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  /// ================= JADWAL =================
-  Widget buildSchedule(String subject, String time) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(
-            subject,
-            style: const TextStyle(color: Colors.white),
-          ),
-          Text(
-            time,
-            style: const TextStyle(color: Colors.white),
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// ================= TANGGAL =================
-  Widget buildDate(String date, String day, bool active) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
-      decoration: BoxDecoration(
-        color: active ? Colors.blue : Colors.grey.shade200,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Column(
-        children: [
-          Text(
-            date,
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-              color: active ? Colors.white : Colors.black,
-            ),
-          ),
-          Text(
-            day,
-            style: TextStyle(
-              fontSize: 10,
-              color: active ? Colors.white : Colors.black,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  Widget buildSchedule(String subject, String time) => Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(subject,
+                style: const TextStyle(color: Colors.white)),
+            Text(time,
+                style: const TextStyle(color: Colors.white)),
+          ],
+        ),
+      );
 }
 
 /// ================= REKAP CARD =================
 class RekapCard extends StatelessWidget {
-  final String title;
-  final String value;
+  final String title, value;
   final Color color;
 
   const RekapCard(this.title, this.value, this.color, {super.key});
@@ -301,39 +311,25 @@ class RekapCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(10),
-
       decoration: BoxDecoration(
         color: color,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
-          BoxShadow(
-            color: color.withOpacity(0.4),
-            blurRadius: 5,
-          ),
+          BoxShadow(color: color.withOpacity(0.4), blurRadius: 5)
         ],
       ),
-
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Text(
-            title,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 12,
-            ),
-          ),
-
+          Text(title,
+              style: const TextStyle(
+                  color: Colors.white, fontSize: 12)),
           const SizedBox(height: 6),
-
-          Text(
-            value,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
+          Text(value,
+              style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold)),
         ],
       ),
     );

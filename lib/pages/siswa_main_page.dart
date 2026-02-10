@@ -1,20 +1,20 @@
-import 'package:absensi_siswa/screens/home_screen.dart';
+import 'package:absensi_siswa/screens/home_screen_siswa.dart';
 import 'package:absensi_siswa/screens/profile_screen.dart';
 import 'package:absensi_siswa/screens/riwayat_screen.dart';
 import 'package:flutter/material.dart';
 
-class HomePage extends StatefulWidget {
-  const HomePage({super.key});
+class SiswaMainPage extends StatefulWidget {
+  const SiswaMainPage({super.key});
 
   @override
-  State<HomePage> createState() => _HomePageState();
+  State<SiswaMainPage> createState() => _SiswaMainPageState();
 }
 
-class _HomePageState extends State<HomePage> {
+class _SiswaMainPageState extends State<SiswaMainPage> {
   int _currentIndex = 0;
 
   final List<Widget> _pages = const [
-    HomeScreen(),
+    HomeScreenSiswa(),
     RiwayatScreen(),
     ProfilePage(),
   ];

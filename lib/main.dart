@@ -1,12 +1,20 @@
-import 'package:absensi_siswa/screens/LaporanScreenGuru.dart';
-import 'package:absensi_siswa/screens/ProfileGuru.dart';
-import 'package:absensi_siswa/pages/guruHomePage.dart';
-import 'package:absensi_siswa/screens/splash_screen.dart';
+import 'package:absensi_siswa/screens/auth_wrapper.dart';
 import 'package:flutter/material.dart';
-import 'pages/login_page.dart';
+import 'package:provider/provider.dart';
+import 'viewModels/auth_viewmodel.dart';
+import 'viewModels/kehadiran_viewmodel.dart';
 
 void main() {
-  runApp(const MyApp());
+  runApp(
+    /// 1. Gunakan MultiProvider di tingkat paling atas
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => AuthViewModel()),
+        ChangeNotifierProvider(create: (_) => KehadiranViewmodel()),
+      ],
+      child: const MyApp(),
+    ),
+  );
 }
 
 class MyApp extends StatelessWidget {
@@ -14,9 +22,15 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const MaterialApp(
+    return MaterialApp(
+      title: 'Absensi Siswa',
       debugShowCheckedModeBanner: false,
-      home: GuruMainPage(),
+      theme: ThemeData(
+        primarySwatch: Colors.blue,
+        useMaterial3: true,
+      ),
+      /// 2. Arahkan home ke AuthWrapper agar pengecekan login berjalan
+      home: const AuthWrapper(),
     );
   }
 }
