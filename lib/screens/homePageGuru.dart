@@ -185,8 +185,8 @@ class _GuruHomePageState extends State<GuruHomePage> {
                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)
                 ),
                 const SizedBox(height: 12),
-                _classTile(title: "Matematika", time: "08:00 AM", room: "Ruang 10", completed: true),
-                _classTile(title: "Fisika Modern", time: "10:00 AM", room: "Lab Utama", active: true),
+                _classTile(title: "Matematika", time: "08:00 AM", room: "XII PPLG 2", completed: true),
+                _classTile(title: "Matematika", time: "13:00 AM", room: "XII PPLG 1", active: true),
               ],
             ),
           ),

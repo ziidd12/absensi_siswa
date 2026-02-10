@@ -1,3 +1,4 @@
+import 'package:absensi_siswa/pages/login_page.dart';
 import 'package:flutter/material.dart';
 
 class GuruProfilePage extends StatelessWidget {
@@ -22,7 +23,6 @@ class GuruProfilePage extends StatelessWidget {
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
-
             /// Profile Header
             Container(
               padding: const EdgeInsets.all(20),
@@ -34,9 +34,7 @@ class GuruProfilePage extends StatelessWidget {
                 children: const [
                   CircleAvatar(
                     radius: 40,
-                    backgroundImage: AssetImage(
-                      "assets/avatar.png", // ganti sesuai asset kamu
-                    ),
+                    backgroundImage: AssetImage("assets/avatar.png"),
                   ),
                   SizedBox(height: 12),
                   Text(
@@ -58,18 +56,22 @@ class GuruProfilePage extends StatelessWidget {
             const SizedBox(height: 20),
 
             _profileMenu(
+              context,
               icon: Icons.edit,
               title: "Edit Profile",
             ),
             _profileMenu(
+              context,
               icon: Icons.lock_outline,
               title: "Change Password",
             ),
             _profileMenu(
+              context,
               icon: Icons.help_outline,
               title: "Help & Support",
             ),
             _profileMenu(
+              context,
               icon: Icons.logout,
               title: "Logout",
               isLogout: true,
@@ -80,7 +82,8 @@ class GuruProfilePage extends StatelessWidget {
     );
   }
 
-  Widget _profileMenu({
+  Widget _profileMenu(
+    BuildContext context, {
     required IconData icon,
     required String title,
     bool isLogout = false,
@@ -104,7 +107,17 @@ class GuruProfilePage extends StatelessWidget {
           ),
         ),
         trailing: const Icon(Icons.chevron_right),
-        onTap: () {},
+        onTap: () {
+          if (isLogout) {
+            Navigator.of(context, rootNavigator: true)
+                .pushAndRemoveUntil(
+              MaterialPageRoute(
+                builder: (_) => const LoginPage(),
+              ),
+              (route) => false,
+            );
+          }
+        },
       ),
     );
   }
