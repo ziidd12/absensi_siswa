@@ -8,7 +8,7 @@ import 'package:path/path.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 
 class ApiService {
-  static const String baseUrl = 'https://calculous-unsculptured-ngan.ngrok-free.dev/api';
+  static const String baseUrl = 'https://cod-active-bluejay.ngrok-free.app/api';
 
   static Future<Map<String, String>> _getHeaders() async {
     final token = await TokenStorage.getToken();
@@ -16,7 +16,7 @@ class ApiService {
       'Authorization': 'Bearer $token',
       'Content-Type': 'application/json',
       'Accept': 'application/json',
-      'ngrok-skip-browser-warning': 'true',
+      'ngrok-skip-browser-warning': 'true', // Pastikan ini ada di SINI
     };
   }
 
