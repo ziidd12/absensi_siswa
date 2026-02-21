@@ -1,4 +1,4 @@
-import 'package:absensi_siswa/viewModels/kehadiran_viewmodel.dart';
+import 'package:absensi_siswa/viewmodels/kehadiran_viewmodel.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:qr_flutter/qr_flutter.dart';

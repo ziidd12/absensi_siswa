@@ -2,7 +2,7 @@ import 'package:absensi_siswa/pages/guru_main_page.dart';
 import 'package:absensi_siswa/pages/siswa_main_page.dart';
 import 'package:absensi_siswa/pages/login_page.dart';
 import 'package:absensi_siswa/screens/home_screen_siswa.dart';
-import 'package:absensi_siswa/viewModels/auth_viewmodel.dart';
+import 'package:absensi_siswa/viewmodels/auth_viewmodel.dart';
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
