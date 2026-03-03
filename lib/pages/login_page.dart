@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../viewModels/auth_viewmodel.dart'; // Pastikan path benar
+import '../viewmodels/auth_viewmodel.dart'; // Pastikan path benar
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});

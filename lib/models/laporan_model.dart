@@ -1,10 +1,10 @@
-class laporanModel {
+class LaporanModel {
   bool? success;
   Data? data;
 
-  laporanModel({this.success, this.data});
+  LaporanModel({this.success, this.data});
 
-  laporanModel.fromJson(Map<String, dynamic> json) {
+  LaporanModel.fromJson(Map<String, dynamic> json) {
     success = json['success'];
     data = json['data'] != null ? new Data.fromJson(json['data']) : null;
   }
@@ -23,22 +23,24 @@ class Data {
   Filter? filter;
   Statistik? statistik;
   int? totalData;
+  Map<String, int>? statistikGrafik; // Tambahkan ini
   List<Absensi>? absensi;
 
-  Data({this.filter, this.statistik, this.totalData, this.absensi});
+  Data({this.filter, this.statistik, this.totalData, this.statistikGrafik, this.absensi});
 
   Data.fromJson(Map<String, dynamic> json) {
-    filter =
-        json['filter'] != null ? new Filter.fromJson(json['filter']) : null;
-    statistik = json['statistik'] != null
-        ? new Statistik.fromJson(json['statistik'])
-        : null;
+    filter = json['filter'] != null ? Filter.fromJson(json['filter']) : null;
+    statistik = json['statistik'] != null ? Statistik.fromJson(json['statistik']) : null;
     totalData = json['total_data'];
+    
+    // Parsing Map statistik_grafik
+    if (json['statistik_grafik'] != null) {
+      statistikGrafik = Map<String, int>.from(json['statistik_grafik']);
+    }
+
     if (json['absensi'] != null) {
       absensi = <Absensi>[];
-      json['absensi'].forEach((v) {
-        absensi!.add(new Absensi.fromJson(v));
-      });
+      json['absensi'].forEach((v) { absensi!.add(Absensi.fromJson(v)); });
     }
   }
 
@@ -67,18 +69,27 @@ class Filter {
   Filter({this.tingkat, this.jurusan, this.status, this.tahunAjaranId});
 
   Filter.fromJson(Map<String, dynamic> json) {
-    tingkat = json['tingkat'];
+    // PERBAIKAN: Gunakan fungsi bantuan untuk mengubah String ke Int jika perlu
+    tingkat = _toInt(json['tingkat']);
     jurusan = json['jurusan'];
     status = json['status'];
-    tahunAjaranId = json['tahun_ajaran_id'];
+    tahunAjaranId = _toInt(json['tahun_ajaran_id']);
+  }
+
+  // Fungsi pembantu agar tidak error jika API mengirim String
+  static int? _toInt(dynamic value) {
+    if (value == null) return null;
+    if (value is int) return value;
+    if (value is String) return int.tryParse(value);
+    return null;
   }
 
   Map<String, dynamic> toJson() {
-    final Map<String, dynamic> data = new Map<String, dynamic>();
-    data['tingkat'] = this.tingkat;
-    data['jurusan'] = this.jurusan;
-    data['status'] = this.status;
-    data['tahun_ajaran_id'] = this.tahunAjaranId;
+    final Map<String, dynamic> data = <String, dynamic>{};
+    data['tingkat'] = tingkat;
+    data['jurusan'] = jurusan;
+    data['status'] = status;
+    data['tahun_ajaran_id'] = tahunAjaranId;
     return data;
   }
 }
@@ -92,10 +103,17 @@ class Statistik {
   Statistik({this.hadir, this.sakit, this.izin, this.alpa});
 
   Statistik.fromJson(Map<String, dynamic> json) {
-    hadir = json['Hadir'];
-    sakit = json['Sakit'];
-    izin = json['Izin'];
-    alpa = json['Alpa'];
+    hadir = _toInt(json['Hadir']);
+    sakit = _toInt(json['Sakit']);
+    izin = _toInt(json['Izin']);
+    alpa = _toInt(json['Alpa']);
+  }
+
+  static int? _toInt(dynamic value) {
+    if (value == null) return 0; // Default 0 jika null
+    if (value is int) return value;
+    if (value is String) return int.tryParse(value) ?? 0;
+    return 0;
   }
 
   Map<String, dynamic> toJson() {
@@ -216,31 +234,26 @@ class Kelas {
   String? createdAt;
   String? updatedAt;
 
-  Kelas(
-      {this.id,
-      this.tingkat,
-      this.jurusan,
-      this.nomorKelas,
-      this.createdAt,
-      this.updatedAt});
+  Kelas({this.id, this.tingkat, this.jurusan, this.nomorKelas, this.createdAt, this.updatedAt});
 
   Kelas.fromJson(Map<String, dynamic> json) {
     id = json['id'];
-    tingkat = json['tingkat'];
+    // PERBAIKAN: Pastikan tingkat aman dari String vs Int
+    tingkat = json['tingkat'] is String ? int.tryParse(json['tingkat']) : json['tingkat'];
     jurusan = json['jurusan'];
-    nomorKelas = json['nomor_kelas'];
+    nomorKelas = json['nomor_kelas']?.toString(); // Pastikan nomor kelas jadi String
     createdAt = json['created_at'];
     updatedAt = json['updated_at'];
   }
 
   Map<String, dynamic> toJson() {
-    final Map<String, dynamic> data = new Map<String, dynamic>();
-    data['id'] = this.id;
-    data['tingkat'] = this.tingkat;
-    data['jurusan'] = this.jurusan;
-    data['nomor_kelas'] = this.nomorKelas;
-    data['created_at'] = this.createdAt;
-    data['updated_at'] = this.updatedAt;
+    final Map<String, dynamic> data = <String, dynamic>{};
+    data['id'] = id;
+    data['tingkat'] = tingkat;
+    data['jurusan'] = jurusan;
+    data['nomor_kelas'] = nomorKelas;
+    data['created_at'] = createdAt;
+    data['updated_at'] = updatedAt;
     return data;
   }
 }

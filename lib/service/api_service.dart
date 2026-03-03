@@ -1,10 +1,10 @@
 import 'dart:convert';
-// import 'dart:io';
+import 'dart:typed_data'; // Untuk Uint8List (PDF)
 import 'package:absensi_siswa/models/attendance_scan_model.dart';
 import 'package:absensi_siswa/models/attendance_session_model.dart';
+import 'package:absensi_siswa/models/laporan_model.dart'; // Import model laporan kamu
 import 'package:absensi_siswa/utils/token_storage.dart';
 import 'package:http/http.dart' as http;
-import 'package:path/path.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 
 class ApiService {
@@ -20,21 +20,9 @@ class ApiService {
     };
   }
 
-  static Future<dynamic> get(String endpoint) async {
-    final headers = await _getHeaders();
-    final request = http.get(Uri.parse('$baseUrl/$endpoint'), headers: headers);
-    return _handleApiRequest(request, 'mengambil', endpoint);
-  }
-
-  static Future<dynamic> post(String endpoint, Map<String, dynamic> body) async {
-    final headers = await _getHeaders();
-    final request = http.post(
-      Uri.parse('$baseUrl/$endpoint'),
-      headers: headers,
-      body: jsonEncode(body),
-    );
-    return _handleApiRequest(request, 'mengirim', endpoint);
-  }
+  // --------------------------------------------------------------------------
+  // --- CORE REQUEST HANDLER ---
+  // --------------------------------------------------------------------------
 
   static Future<dynamic> _handleApiRequest(
       Future<http.Response> request, String operationType, String endpoint) async {
@@ -46,7 +34,8 @@ class ApiService {
         if (response.body.isEmpty) return null;
         final decoded = jsonDecode(response.body);
 
-        if (decoded is Map && decoded.containsKey('data')) {
+        // Jika response dibungkus 'data', kita ambil isinya saja
+        if (decoded is Map && decoded.containsKey('data') && endpoint != 'laporan/kehadiran/pdf') {
           return decoded['data'];
         }
         return decoded; 
@@ -55,6 +44,91 @@ class ApiService {
       }
     } catch (e) {
       throw Exception('Error $operationType $endpoint: $e');
+    }
+  }
+
+  static Future<dynamic> get(String endpoint) async {
+    final headers = await _getHeaders();
+    final response = await http.get(Uri.parse('$baseUrl/$endpoint'), headers: headers);
+    
+    if (response.statusCode >= 200 && response.statusCode < 300) {
+      return jsonDecode(response.body);
+    } else {
+      throw Exception('Gagal mengambil data dari $endpoint');
+    }
+  }
+
+  // --------------------------------------------------------------------------
+  // --- LAPORAN METHODS ---
+  // --------------------------------------------------------------------------
+
+  static Future<LaporanModel> fetchLaporanKehadiran({
+    String? tingkat,
+    String? jurusan,
+    String? status,
+    String? tahunAjaranId,
+    int? page,
+  }) async {
+    try {
+      // 1. Ambil headers (Token Otomatis)
+      final headers = await _getHeaders();
+
+      // 2. Siapkan Map untuk Query Parameters
+      Map<String, String> queryParameters = {};
+      
+      if (tingkat != null) queryParameters['tingkat'] = tingkat;
+      if (jurusan != null) queryParameters['jurusan'] = jurusan;
+      if (status != null) queryParameters['status'] = status;
+      if (tahunAjaranId != null) queryParameters['tahun_ajaran_id'] = tahunAjaranId;
+      if (page != null) queryParameters['page'] = page.toString();
+
+      // 3. Bangun URL dengan Query Parameters
+      // Pastikan endpoint '/laporan/kehadiran' sesuai dengan Route di Laravel Anda
+      final uri = Uri.parse('$baseUrl/laporan/kehadiran').replace(queryParameters: queryParameters);
+
+      final response = await http.get(
+        uri,
+        headers: headers, // Menggunakan headers yang sudah berisi token
+      );
+
+      print("📤 DEBUG LAPORAN [${response.statusCode}]: ${response.body}");
+
+      if (response.statusCode == 200) {
+        // Parsing JSON ke model
+        return LaporanModel.fromJson(json.decode(response.body));
+      } else {
+        throw Exception('Gagal memuat laporan. Status: ${response.statusCode}');
+      }
+    } catch (e) {
+      print("❌ Error Fetch Laporan: $e");
+      throw Exception('Error API: $e');
+    }
+  }
+
+  /// Mengambil file PDF mentah
+  static Future<Uint8List> downloadLaporanPdf({
+    String? tingkat,
+    String? jurusan,
+    String? status,
+    String? tahunAjaranId,
+  }) async {
+    final headers = await _getHeaders();
+    
+    final Map<String, String> queryParams = {
+      if (tingkat != null) 'tingkat': tingkat,
+      if (jurusan != null) 'jurusan': jurusan,
+      if (status != null) 'status': status,
+      if (tahunAjaranId != null) 'tahun_ajaran_id': tahunAjaranId,
+      // JANGAN masukkkan 'page' di sini
+    };
+
+    final uri = Uri.parse('$baseUrl/laporan/kehadiran/pdf').replace(queryParameters: queryParams);
+    final response = await http.get(uri, headers: headers);
+
+    if (response.statusCode == 200) {
+      return response.bodyBytes;
+    } else {
+      throw Exception('Gagal mengunduh PDF.');
     }
   }
 
@@ -96,6 +170,9 @@ class ApiService {
         },
         body: jsonEncode({
           'token_qr': tokenQr,
+          // Tambahkan lat/lng jika backend kamu membutuhkannya
+          'latitude': lat,
+          'longitude': lng,
         }),
       ),
       'melakukan scan',
@@ -108,5 +185,15 @@ class ApiService {
     return null;
   }
 
-  
+  static Future<List<dynamic>> fetchTahunAjaran() async {
+    // Memanggil AcademicController@getMasterData
+    final result = await get('academic/master-data'); 
+    
+    // Sesuaikan dengan key di backend. 
+    // Jika di controller kamu namanya 'daftar_tahun_ajaran', pastikan sama.
+    if (result != null && result['daftar_tahun_ajaran'] != null) {
+      return result['daftar_tahun_ajaran'];
+    }
+    return [];
+  }
 }
