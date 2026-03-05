@@ -6,16 +6,7 @@ class LaporanModel {
 
   LaporanModel.fromJson(Map<String, dynamic> json) {
     success = json['success'];
-    data = json['data'] != null ? new Data.fromJson(json['data']) : null;
-  }
-
-  Map<String, dynamic> toJson() {
-    final Map<String, dynamic> data = new Map<String, dynamic>();
-    data['success'] = this.success;
-    if (this.data != null) {
-      data['data'] = this.data!.toJson();
-    }
-    return data;
+    data = json['data'] != null ? Data.fromJson(json['data']) : null;
   }
 }
 
@@ -23,7 +14,7 @@ class Data {
   Filter? filter;
   Statistik? statistik;
   int? totalData;
-  Map<String, int>? statistikGrafik; // Tambahkan ini
+  Map<String, int>? statistikGrafik;
   List<Absensi>? absensi;
 
   Data({this.filter, this.statistik, this.totalData, this.statistikGrafik, this.absensi});
@@ -33,9 +24,11 @@ class Data {
     statistik = json['statistik'] != null ? Statistik.fromJson(json['statistik']) : null;
     totalData = json['total_data'];
     
-    // Parsing Map statistik_grafik
-    if (json['statistik_grafik'] != null) {
+    // FIX: Cek apakah statistik_grafik benar-benar Map atau bukan
+    if (json['statistik_grafik'] != null && json['statistik_grafik'] is Map) {
       statistikGrafik = Map<String, int>.from(json['statistik_grafik']);
+    } else {
+      statistikGrafik = {}; // Jika [], jadikan Map kosong
     }
 
     if (json['absensi'] != null) {
@@ -43,22 +36,48 @@ class Data {
       json['absensi'].forEach((v) { absensi!.add(Absensi.fromJson(v)); });
     }
   }
-
-  Map<String, dynamic> toJson() {
-    final Map<String, dynamic> data = new Map<String, dynamic>();
-    if (this.filter != null) {
-      data['filter'] = this.filter!.toJson();
-    }
-    if (this.statistik != null) {
-      data['statistik'] = this.statistik!.toJson();
-    }
-    data['total_data'] = this.totalData;
-    if (this.absensi != null) {
-      data['absensi'] = this.absensi!.map((v) => v.toJson()).toList();
-    }
-    return data;
-  }
 }
+
+// class Data {
+//   Filter? filter;
+//   Statistik? statistik;
+//   int? totalData;
+//   Map<String, int>? statistikGrafik; // Tambahkan ini
+//   List<Absensi>? absensi;
+
+//   Data({this.filter, this.statistik, this.totalData, this.statistikGrafik, this.absensi});
+
+//   Data.fromJson(Map<String, dynamic> json) {
+//     filter = json['filter'] != null ? Filter.fromJson(json['filter']) : null;
+//     statistik = json['statistik'] != null ? Statistik.fromJson(json['statistik']) : null;
+//     totalData = json['total_data'];
+    
+//     // Parsing Map statistik_grafik
+//     if (json['statistik_grafik'] != null) {
+//       statistikGrafik = Map<String, int>.from(json['statistik_grafik']);
+//     }
+
+//     if (json['absensi'] != null) {
+//       absensi = <Absensi>[];
+//       json['absensi'].forEach((v) { absensi!.add(Absensi.fromJson(v)); });
+//     }
+//   }
+
+//   Map<String, dynamic> toJson() {
+//     final Map<String, dynamic> data = new Map<String, dynamic>();
+//     if (this.filter != null) {
+//       data['filter'] = this.filter!.toJson();
+//     }
+//     if (this.statistik != null) {
+//       data['statistik'] = this.statistik!.toJson();
+//     }
+//     data['total_data'] = this.totalData;
+//     if (this.absensi != null) {
+//       data['absensi'] = this.absensi!.map((v) => v.toJson()).toList();
+//     }
+//     return data;
+//   }
+// }
 
 class Filter {
   int? tingkat;

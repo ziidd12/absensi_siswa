@@ -58,6 +58,8 @@ class ApiService {
     }
   }
 
+  
+
   // --------------------------------------------------------------------------
   // --- LAPORAN METHODS ---
   // --------------------------------------------------------------------------
@@ -112,23 +114,37 @@ class ApiService {
     String? status,
     String? tahunAjaranId,
   }) async {
+    // 1. Ambil header standar (yg berisi Authorization & ngrok-skip)
     final headers = await _getHeaders();
     
+    // 2. TIMPA 'Accept' agar meminta PDF, bukan JSON
+    headers['Accept'] = 'application/pdf';
+
     final Map<String, String> queryParams = {
       if (tingkat != null) 'tingkat': tingkat,
       if (jurusan != null) 'jurusan': jurusan,
       if (status != null) 'status': status,
       if (tahunAjaranId != null) 'tahun_ajaran_id': tahunAjaranId,
-      // JANGAN masukkkan 'page' di sini
     };
 
     final uri = Uri.parse('$baseUrl/laporan/kehadiran/pdf').replace(queryParameters: queryParams);
     final response = await http.get(uri, headers: headers);
 
     if (response.statusCode == 200) {
-      return response.bodyBytes;
+      final bytes = response.bodyBytes;
+      
+      // Validasi magic number %PDF
+      if (bytes.length > 4) {
+        String header = String.fromCharCodes(bytes.take(4));
+        if (header == "%PDF") return bytes; 
+      }
+
+      // Jika masuk sini, artinya Laravel masih kirim teks/JSON
+      String errorRaw = utf8.decode(bytes.take(200).toList(), allowMalformed: true);
+      print("❌ BUKAN PDF. ISI: $errorRaw");
+      throw Exception("Respon server bukan file PDF yang valid.");
     } else {
-      throw Exception('Gagal mengunduh PDF.');
+      throw Exception('Gagal download (Status: ${response.statusCode})');
     }
   }
 
@@ -195,5 +211,15 @@ class ApiService {
       return result['daftar_tahun_ajaran'];
     }
     return [];
+  }
+
+  static Future<Map<String, dynamic>> fetchMasterData() async {
+    // Memanggil AcademicController@getMasterData
+    final result = await get('academic/master-data'); 
+    
+    if (result != null) {
+      return result;
+    }
+    return {};
   }
 }

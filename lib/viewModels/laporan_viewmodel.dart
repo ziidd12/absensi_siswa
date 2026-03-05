@@ -1,7 +1,12 @@
+// lib/viewmodels/laporan_viewmodel.dart
+
+import 'dart:io';
 import 'package:absensi_siswa/models/laporan_model.dart' as model;
 import 'package:absensi_siswa/service/api_service.dart';
 import 'package:flutter/material.dart';
 import 'dart:typed_data';
+import 'package:open_filex/open_filex.dart';
+import 'package:path_provider/path_provider.dart';
 
 class LaporanViewmodel extends ChangeNotifier {
   bool _isLoading = false;
@@ -10,12 +15,10 @@ class LaporanViewmodel extends ChangeNotifier {
   model.LaporanModel? _reportData;
   model.LaporanModel? get reportData => _reportData;
 
-  // Pagination State
   int _currentPage = 1;
   int get currentPage => _currentPage;
   
-  // Hitung total halaman (asumsi per page dari API adalah 10 atau 15)
-  // Anda bisa menyesuaikan ini berdasarkan field 'total_data' dari API
+  // Hitung total halaman berdasarkan total data dari API (asumsi 5 data per halaman)
   int get totalPages {
     int total = _reportData?.data?.totalData ?? 0;
     if (total == 0) return 1;
@@ -25,14 +28,34 @@ class LaporanViewmodel extends ChangeNotifier {
   List<dynamic> _listTahunAjaran = [];
   List<dynamic> get listTahunAjaran => _listTahunAjaran;
 
+  List<String> _listTingkat = [];
+  List<String> get listTingkat => _listTingkat;
+
+  List<String> _listJurusan = [];
+  List<String> get listJurusan => _listJurusan;
+
   String? selectedTingkat;
   String? selectedJurusan;
   String? selectedStatus;
   String? selectedTahunAjaranId;
 
+  // --- FUNGSI PAGINATION (TAMBAHKAN INI) ---
+  void nextPage() {
+    if (_currentPage < totalPages) {
+      fetchLaporan(page: _currentPage + 1);
+    }
+  }
+
+  void prevPage() {
+    if (_currentPage > 1) {
+      fetchLaporan(page: _currentPage - 1);
+    }
+  }
+  // ----------------------------------------
+
   Future<void> fetchLaporan({int page = 1}) async {
     _isLoading = true;
-    _currentPage = page; // Set halaman aktif
+    _currentPage = page; // Update halaman aktif
     notifyListeners();
 
     try {
@@ -41,29 +64,28 @@ class LaporanViewmodel extends ChangeNotifier {
         jurusan: selectedJurusan,
         status: selectedStatus,
         tahunAjaranId: selectedTahunAjaranId,
-        page: _currentPage, // Kirim ke ApiService
+        page: _currentPage,
       );
     } catch (e) {
-      debugPrint("Error: $e");
+      debugPrint("Error Fetch Laporan: $e");
     } finally {
       _isLoading = false;
       notifyListeners();
     }
   }
 
-  void nextPage() {
-    if (_currentPage < totalPages) fetchLaporan(page: _currentPage + 1);
-  }
-
-  void prevPage() {
-    if (_currentPage > 1) fetchLaporan(page: _currentPage - 1);
-  }
-
   Future<void> initMasterData() async {
     _isLoading = true;
     notifyListeners();
     try {
-      _listTahunAjaran = await ApiService.fetchTahunAjaran();
+      final masterData = await ApiService.fetchMasterData();
+      
+      _listTahunAjaran = masterData['daftar_tahun_ajaran'] ?? [];
+      List<dynamic> daftarKelas = masterData['daftar_kelas'] ?? [];
+
+      _listTingkat = daftarKelas.map((e) => e['tingkat'].toString()).toSet().toList()..sort();
+      _listJurusan = daftarKelas.map((e) => e['jurusan'].toString()).toSet().toList()..sort();
+
       if (_listTahunAjaran.isNotEmpty) {
         final activeYear = _listTahunAjaran.firstWhere(
           (e) => e['is_active'] == 1 || e['is_active'] == true,
@@ -71,37 +93,53 @@ class LaporanViewmodel extends ChangeNotifier {
         );
         selectedTahunAjaranId = activeYear['id'].toString();
       }
-      await fetchLaporan(); // Panggil fetch setelah init master
+
+      await fetchLaporan(); 
     } catch (e) {
-      debugPrint("Gagal load master data: $e");
+      debugPrint("Error Init Master: $e");
     } finally {
       _isLoading = false;
       notifyListeners();
     }
   }
 
-  // PERBAIKAN DI SINI:
-  // Pastikan fungsi ini bisa dipanggil tanpa argumen
-  Future<Uint8List> downloadLaporanPdf() async {
+  // Setters untuk Filter
+  void setTingkat(String? val) { selectedTingkat = val; _currentPage = 1; fetchLaporan(); }
+  void setJurusan(String? val) { selectedJurusan = val; _currentPage = 1; fetchLaporan(); }
+  void setStatus(String? val) { selectedStatus = val; _currentPage = 1; fetchLaporan(); }
+  void setTahunAjaran(String? val) { selectedTahunAjaranId = val; _currentPage = 1; fetchLaporan(); }
+
+  // Fungsi Download PDF
+  Future<void> downloadAndOpenFile() async {
     try {
-      // Menggunakan state filter yang ada di ViewModel
-      final pdfBytes = await ApiService.downloadLaporanPdf(
+      _isLoading = true;
+      notifyListeners();
+
+      final bytes = await ApiService.downloadLaporanPdf(
         tingkat: selectedTingkat,
         jurusan: selectedJurusan,
         status: selectedStatus,
-        // Jika API Anda butuh tahun_ajaran_id untuk PDF, tambahkan di bawah:
-        // tahunAjaranId: selectedTahunAjaranId, 
+        tahunAjaranId: selectedTahunAjaranId,
       );
-      return pdfBytes;
+
+      final dir = await getTemporaryDirectory();
+      final fileName = "Laporan_${DateTime.now().millisecondsSinceEpoch}.pdf";
+      final file = File("${dir.path}/$fileName");
+
+      await file.writeAsBytes(bytes);
+      await OpenFilex.open(file.path);
     } catch (e) {
-      throw Exception('Gagal mengunduh PDF: $e');
+      debugPrint("Gagal Download: $e");
+      rethrow;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
     }
   }
 
-  // Statistik per kelas untuk Grafik (Sekarang ambil data utuh dari API)
   Map<String, int> get perClassStats {
-    // Jika API mengirim data statistik_grafik, gunakan itu. 
-    // Jika tidak ada, baru fallback ke absensi (atau kosongkan).
-    return _reportData?.data?.statistikGrafik ?? {};
+    final data = _reportData?.data?.statistikGrafik;
+    if (data == null) return {};
+    return Map<String, int>.from(data);
   }
 }
