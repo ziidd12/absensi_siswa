@@ -114,11 +114,10 @@ class ApiService {
     String? status,
     String? tahunAjaranId,
   }) async {
-    // 1. Ambil header standar (yg berisi Authorization & ngrok-skip)
     final headers = await _getHeaders();
     
-    // 2. TIMPA 'Accept' agar meminta PDF, bukan JSON
     headers['Accept'] = 'application/pdf';
+    headers['ngrok-skip-browser-warning'] = 'true';
 
     final Map<String, String> queryParams = {
       if (tingkat != null) 'tingkat': tingkat,
@@ -128,23 +127,25 @@ class ApiService {
     };
 
     final uri = Uri.parse('$baseUrl/laporan/kehadiran/pdf').replace(queryParameters: queryParams);
-    final response = await http.get(uri, headers: headers);
+    
+    try {
+      final response = await http.get(uri, headers: headers);
 
-    if (response.statusCode == 200) {
-      final bytes = response.bodyBytes;
-      
-      // Validasi magic number %PDF
-      if (bytes.length > 4) {
-        String header = String.fromCharCodes(bytes.take(4));
-        if (header == "%PDF") return bytes; 
+      if (response.statusCode == 200) {
+        final bytes = response.bodyBytes;
+        // Cek Magic Number PDF (%PDF-)
+        if (bytes.length > 4 && bytes[0] == 0x25 && bytes[1] == 0x50 && bytes[2] == 0x44 && bytes[3] == 0x46) {
+          return bytes;
+        }
+        throw Exception("Respon server bukan file PDF valid.");
+      } else {
+        // Jika error, decode isinya untuk melihat pesan error Laravel
+        String errorInfo = utf8.decode(response.bodyBytes);
+        print("❌ DOWNLOAD ERROR: $errorInfo");
+        throw Exception("Gagal unduh PDF (Status: ${response.statusCode})");
       }
-
-      // Jika masuk sini, artinya Laravel masih kirim teks/JSON
-      String errorRaw = utf8.decode(bytes.take(200).toList(), allowMalformed: true);
-      print("❌ BUKAN PDF. ISI: $errorRaw");
-      throw Exception("Respon server bukan file PDF yang valid.");
-    } else {
-      throw Exception('Gagal download (Status: ${response.statusCode})');
+    } catch (e) {
+      rethrow;
     }
   }
 
