@@ -3,6 +3,14 @@ import 'package:absensi_siswa/models/attendance_session_model.dart';
 import 'package:absensi_siswa/service/api_service.dart';
 import 'package:flutter/material.dart';
 
+class Pelajaran {
+  final String nama;
+  final String jam;
+  bool isAbsen;
+
+  Pelajaran({required this.nama, required this.jam, this.isAbsen = false});
+}
+
 class KehadiranViewmodel extends ChangeNotifier {
   bool _isLoading = false;
   bool get isLoading => _isLoading;
@@ -10,40 +18,27 @@ class KehadiranViewmodel extends ChangeNotifier {
   String? _errorMessage;
   String? get errorMessage => _errorMessage;
 
+  // Data Sesi untuk Guru
   attendanceSessionModel? _sessionData;
   attendanceSessionModel? get sessionData => _sessionData;
 
-  List<dynamic> _historyGuru = [];
-  List<dynamic> get historyGuru => _historyGuru;
+  // Data Jadwal untuk Siswa (Testing Malam Ini)
+  List<Pelajaran> _jadwalSiswa = [
+    Pelajaran(nama: "Matematika", jam: "07.10 - 09.10"),
+    Pelajaran(nama: "B. Indonesia", jam: "09.25 - 11.25"),
+    Pelajaran(nama: "Konsentrasi RPL", jam: "12.30 - 14.30"),
+    Pelajaran(nama: "BK", jam: "14.30 - 15.10"),
+  ];
+  List<Pelajaran> get jadwalSiswa => _jadwalSiswa;
 
-  // List<HistoryModel> _historyList = [];
-  // List<HistoryModel> get historyList => _historyList;
-
-  // Future<void> fetchHistory() async {
-  //   _isLoading = true;
-  //   _errorMessage = null;
-  //   notifyListeners();
-
-  //   try {
-  //     _historyList = await ApiService.fetchRiwayat();
-  //   } catch (e) {
-  //     _errorMessage = e.toString();
-  //     debugPrint("Error Fetch History: $e");
-  //   } finally {
-  //     _isLoading = false;
-  //     notifyListeners();
-  //   }
-  // }
-
-  // Guru: Membuat Sesi QR
+  // ===================== FUNGSI GURU =====================
   Future<void> createSession(int jadwalId) async {
     _isLoading = true;
-    _sessionData = null; // 1. Reset data lama agar QR tidak "nyangkut"
+    _sessionData = null;
     _errorMessage = null;
     notifyListeners();
     
     try {
-      // 2. Ambil data baru dari API
       _sessionData = await ApiService.createAttendanceSession(jadwalId);
     } catch (e) {
       _errorMessage = e.toString();
@@ -53,13 +48,20 @@ class KehadiranViewmodel extends ChangeNotifier {
     }
   }
 
-  // Siswa: Scan QR
-  Future<attendanceScanModel?> scanQR(String token, double lat, double lng) async {
+  // ===================== FUNGSI SISWA =====================
+  Future<attendanceScanModel?> scanQR(String token, double lat, double lng, String namaMapel) async {
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
     try {
       final result = await ApiService.scanQR(token, lat, lng);
+      
+      if (result != null) {
+        int index = _jadwalSiswa.indexWhere((p) => p.nama == namaMapel);
+        if (index != -1) {
+          _jadwalSiswa[index].isAbsen = true;
+        }
+      }
       return result;
     } catch (e) {
       _errorMessage = 'Gagal Absen: $e';
@@ -69,29 +71,4 @@ class KehadiranViewmodel extends ChangeNotifier {
       notifyListeners();
     }
   }
-
-  // Future<void> fetchReportGuru({required String tahunAjaranId, required String kelasId}) async {
-  //   _isLoading = true;
-  //   _errorMessage = null;
-  //   notifyListeners();
-
-  //   try {
-  //     final response = await ApiService.fetchReportGuru(tahunAjaranId, kelasId);
-  //     _historyGuru = response;
-  //   } catch (e) {
-  //     _errorMessage = e.toString();
-  //   } finally {
-  //     _isLoading = false;
-  //     notifyListeners();
-  //   }
-  // }
-
-  // Future<void> exportToExcel({required String tahunAjaranId, required String kelasId}) async {
-  //   try {
-  //     await ApiService.downloadReport(tahunAjaranId, kelasId);
-  //   } catch (e) {
-  //     _errorMessage = "Gagal mengunduh file: $e";
-  //     notifyListeners();
-  //   }
-  // }
 }
