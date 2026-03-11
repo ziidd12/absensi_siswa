@@ -126,12 +126,12 @@ class _LoginPageState extends State<LoginPage> {
                       Image.asset('assets/images/sekolah.png', width: 300),
                       const SizedBox(height: 8),
                       const Text(
-                        'ABSENSI SISWA',
+                        'GoAbsen',
                         style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.red),
                       ),
                       const SizedBox(height: 24),
                       const Text(
-                        'Login Dulu yah',
+                        'Silahkan Login Terlebih Dahulu',
                         style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
                       ),
                       const SizedBox(height: 24),

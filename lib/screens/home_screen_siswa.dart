@@ -118,16 +118,22 @@ class _HomeScreenSiswaState extends State<HomeScreenSiswa> {
 
   void _processAttendance(String token, String namaMapel) async {
     final viewModel = Provider.of<KehadiranViewmodel>(context, listen: false);
+    
+    // Nanti di ViewModel, pastikan scanQR mengirim koordinat asli jika ingin pakai radius
+    // Untuk tes sementara kita pakai 0.0 dulu
     final result = await viewModel.scanQR(token, 0.0, 0.0, namaMapel);
 
     if (!mounted) return;
 
-    _showResultBottomSheet(
-      result != null,
-      result != null 
-          ? "Berhasil absen di mata pelajaran $namaMapel" 
-          : (viewModel.errorMessage ?? "Gagal melakukan absensi."),
-    );
+    if (result != null) {
+      // Jika Sukses
+      _showResultBottomSheet(true, "Berhasil absen di mata pelajaran $namaMapel");
+    } else {
+      // Jika Gagal (Di sini "Satpam Kelas" akan beraksi)
+      // Kita ambil pesan error langsung dari ViewModel yang didapat dari Laravel
+      String pesanError = viewModel.errorMessage ?? "Gagal melakukan absensi.";
+      _showResultBottomSheet(false, pesanError);
+    }
   }
 
   void _showResultBottomSheet(bool success, String message) {

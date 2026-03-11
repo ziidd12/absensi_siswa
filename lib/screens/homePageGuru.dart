@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:absensi_siswa/pages/jadwal_page.dart';
 import 'package:absensi_siswa/viewmodels/kehadiran_viewmodel.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -6,8 +7,8 @@ import 'package:qr_flutter/qr_flutter.dart';
 import 'package:intl/intl.dart';
 import 'package:absensi_siswa/utils/token_storage.dart';
 import 'package:absensi_siswa/pages/login_page.dart';
-// Import halaman absensi kelas yang kita bahas tadi
-// import 'package:absensi_siswa/pages/absensi_kelas_screen.dart'; 
+import 'package:absensi_siswa/pages/absensi_manual_page.dart'; 
+import 'package:absensi_siswa/pages/riwayat_page.dart';
 
 class GuruHomePage extends StatefulWidget {
   const GuruHomePage({super.key});
@@ -24,7 +25,7 @@ class _GuruHomePageState extends State<GuruHomePage> {
   void initState() {
     super.initState();
     _loadProfile();
-    // Update status jadwal tiap menit
+    // Update UI setiap menit agar status LIVE/SELESAI berubah otomatis
     _timer = Timer.periodic(const Duration(minutes: 1), (timer) {
       if (mounted) setState(() {});
     });
@@ -41,6 +42,46 @@ class _GuruHomePageState extends State<GuruHomePage> {
     setState(() => _userName = name);
   }
 
+  // --- FUNGSI NAVIGASI DENGAN VALIDASI WAKTU ---
+  void _navigateToManual(String kelas, String mapel, String timeRange) async {
+    // 1. Cek Status Waktu Dulu
+    int status = _checkClassStatus(timeRange);
+
+    if (status == 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Sabar Kak, kelas belum dimulai!"), backgroundColor: Colors.orange),
+      );
+      return;
+    } else if (status == 2) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Ehh, jam mengajar sudah habis!"), backgroundColor: Colors.red),
+      );
+      return;
+    }
+
+    // 2. Jika Status == 1 (LIVE), Lanjut Cek Token
+    final token = await TokenStorage.getToken();
+    
+    if (token == null || token.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Sesi habis, silakan login ulang"), backgroundColor: Colors.red),
+      );
+      return;
+    }
+
+    if (!mounted) return;
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => AbsensiManualPage(
+          namaKelas: kelas,
+          mapel: mapel,
+        ),
+      ),
+    );
+  }
+
   void _handleLogout() async {
     await TokenStorage.clearAll();
     if (mounted) {
@@ -52,7 +93,6 @@ class _GuruHomePageState extends State<GuruHomePage> {
     }
   }
 
-  // Helper untuk menentukan status kelas (0: Belum, 1: Sedang Berlangsung, 2: Selesai)
   int _checkClassStatus(String timeRange) {
     try {
       final now = DateTime.now();
@@ -63,39 +103,33 @@ class _GuruHomePageState extends State<GuruHomePage> {
       final startTime = DateTime(now.year, now.month, now.day, int.parse(startParts[0]), int.parse(startParts[1]));
       final endTime = DateTime(now.year, now.month, now.day, int.parse(endParts[0]), int.parse(endParts[1]));
 
-      if (now.isBefore(startTime)) return 0;
-      if (now.isAfter(endTime)) return 2;
-      return 1; 
+      if (now.isBefore(startTime)) return 0; // Belum mulai
+      if (now.isAfter(endTime)) return 2;    // Sudah selesai
+      return 1; // Sedang berlangsung (LIVE)
     } catch (e) {
       return 0;
     }
   }
 
   void _openAttendance(BuildContext context) async {
-  final viewModel = Provider.of<KehadiranViewmodel>(context, listen: false);
-  
-  // 1. Coba panggil API
-  await viewModel.createSession(1); 
+    final viewModel = Provider.of<KehadiranViewmodel>(context, listen: false);
+    await viewModel.createSession(1); 
 
-  if (!mounted) return;
+    if (!mounted) return;
 
-  // 2. Cek apakah datanya ada
-  if (viewModel.sessionData != null && viewModel.sessionData!.tokenQr != null) {
-    _showQRDialog(context, viewModel.sessionData!.tokenQr!);
-  } else {
-    // 3. Jika gagal, munculkan pesan error aslinya dari Viewmodel
-    // Ini akan membantu kita tahu apakah masalahnya: Token habis, Server mati, atau Jadwal salah.
-    String pesanError = viewModel.errorMessage ?? "Gagal: Jadwal mungkin sudah berakhir atau ID 1 tidak ada.";
-    
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(pesanError), 
-        backgroundColor: Colors.red,
-        duration: const Duration(seconds: 5), // Lebih lama agar sempat terbaca
-      ),
-    );
+    if (viewModel.sessionData != null && viewModel.sessionData!.tokenQr != null) {
+      _showQRDialog(context, viewModel.sessionData!.tokenQr!);
+    } else {
+      String pesanError = viewModel.errorMessage ?? "Gagal: Jadwal mungkin sudah berakhir atau ID 1 tidak ada.";
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(pesanError), 
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 5),
+        ),
+      );
+    }
   }
-}
 
   void _showQRDialog(BuildContext context, String token) {
     showDialog(
@@ -108,7 +142,7 @@ class _GuruHomePageState extends State<GuruHomePage> {
           textAlign: TextAlign.center, 
           style: TextStyle(fontWeight: FontWeight.bold)
         ),
-        content: SizedBox( // Membungkus dengan SizedBox agar ukurannya terukur
+        content: SizedBox(
           width: 300, 
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -146,7 +180,6 @@ class _GuruHomePageState extends State<GuruHomePage> {
           ),
         ),
         actions: [
-          // HAPUS Center di sini, biarkan TextButton yang mengatur posisinya
           TextButton(
             onPressed: () => Navigator.pop(context),
             child: const Text(
@@ -191,32 +224,43 @@ class _GuruHomePageState extends State<GuruHomePage> {
                   _buildHeaderCard(context, kehadiranVM),
                   const SizedBox(height: 24),
                   
-                  // MENU BARU: Navigasi Cepat
                   const Text("Menu Utama", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 12),
                   Row(
                     children: [
-                      _menuButton(context, "Absen Manual", Icons.fact_check_rounded, Colors.orange, () {
-                        // Navigasi ke Halaman Absensi Kelas yang kita buat tadi
-                        // Navigator.push(context, MaterialPageRoute(builder: (context) => const AbsensiKelasScreen()));
+                      _menuButton(context, "Jadwal", Icons.calendar_month_rounded, Colors.orange, () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (context) => const JadwalPage()),
+                        );
                       }),
                       const SizedBox(width: 12),
                       _menuButton(context, "Riwayat", Icons.history_rounded, Colors.purple, () {
-                        // Ke halaman riwayat
-                      }),
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const RiwayatPage()),
+    );
+}),
                     ],
                   ),
                   
                   const SizedBox(height: 24),
                   const Text("Jadwal Mengajar Hari Ini", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 12),
+                  
                   _classTile(
-                    title: "Matematika - XII RPL 1", time: "07.10 - 09.10", room: "LAB RPL 1", 
+                    title: "Matematika - XII PPLG 1", 
+                    time: "07.10 - 09.10", 
+                    room: "LAB RPL 1", 
                     status: _checkClassStatus("07.10 - 09.10"),
+                    onTap: () => _navigateToManual("XII PPLG 1", "Matematika", "07.10 - 09.10"),
                   ),
                   _classTile(
-                    title: "Matematika - XII RPL 2", time: "10:30 - 12:00", room: "XII RPL 2", 
+                    title: "Matematika - XII PPLG 2", 
+                    time: "10:30 - 12:00", 
+                    room: "XII PPLG 2", 
                     status: _checkClassStatus("10:30 - 12:00"),
+                    onTap: () => _navigateToManual("XII PPLG 2", "Matematika", "10:30 - 12:00"),
                   ),
                 ],
               ),
@@ -281,33 +325,47 @@ class _GuruHomePageState extends State<GuruHomePage> {
     );
   }
 
-  Widget _classTile({required String title, required String time, required String room, required int status}) {
+  Widget _classTile({
+    required String title, 
+    required String time, 
+    required String room, 
+    required int status,
+    required VoidCallback onTap,
+  }) {
     Color color = status == 1 ? Colors.blue : (status == 2 ? Colors.green : Colors.grey);
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white, borderRadius: BorderRadius.circular(14),
-        border: status == 1 ? Border.all(color: Colors.blue.shade200) : null,
-      ),
-      child: Row(
-        children: [
-          Icon(status == 2 ? Icons.check_circle : Icons.access_time_filled, color: color),
-          const SizedBox(width: 15),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
-                Text("$time • $room", style: const TextStyle(color: Colors.grey, fontSize: 12)),
-              ],
-            ),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white, 
+            borderRadius: BorderRadius.circular(14),
+            border: status == 1 ? Border.all(color: Colors.blue.shade200) : null,
           ),
-          if (status == 1) 
-            const Badge(label: Text("LIVE"), backgroundColor: Colors.red)
-          else if (status == 2)
-            const Text("SELESAI", style: TextStyle(color: Colors.green, fontSize: 10, fontWeight: FontWeight.bold)),
-        ],
+          child: Row(
+            children: [
+              Icon(status == 2 ? Icons.check_circle : Icons.access_time_filled, color: color),
+              const SizedBox(width: 15),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
+                    Text("$time • $room", style: const TextStyle(color: Colors.grey, fontSize: 12)),
+                  ],
+                ),
+              ),
+              if (status == 1) 
+                const Badge(label: Text("LIVE"), backgroundColor: Colors.red)
+              else if (status == 2)
+                const Text("SELESAI", style: TextStyle(color: Colors.green, fontSize: 10, fontWeight: FontWeight.bold)),
+              const Icon(Icons.chevron_right, size: 16, color: Colors.grey),
+            ],
+          ),
+        ),
       ),
     );
   }
