@@ -1,4 +1,5 @@
 import 'package:absensi_siswa/screens/home_screen_siswa.dart';
+import 'package:absensi_siswa/screens/penilaian/siswa_assessment_report_page.dart';
 import 'package:absensi_siswa/screens/profile_screen.dart';
 import 'package:absensi_siswa/screens/riwayat_screen.dart';
 import 'package:absensi_siswa/screens/HalamanPoinSiswa.dart'; // Import halaman poin
@@ -24,11 +25,10 @@ class _SiswaMainPageState extends State<SiswaMainPage> {
     final List<Widget> _pages = [
       const HomeScreenSiswa(),
       const RiwayatScreen(),
-      HalamanPoinSiswa(siswaId: currentSiswaId), // Ini akan mengirim angka 1 ke API
+      SiswaAssessmentReportPage(),
       const ProfilePage(),
     ];
     
-    // ... sisa kode build Scaffold kamu tetap sama
 
     return Scaffold(
       backgroundColor: const Color(0xFFF2F4F7),
