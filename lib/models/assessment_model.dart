@@ -1,391 +1,74 @@
-class AssessmentModel {
-  final int id;
-  final int evaluatorId;
-  final int siswaId;
-  final int categoryId;
-  final double score;
-  final String period;
+class Assessment {
+  final int? id;
+  final int? evaluatorId;
+  final int evaluateeId;
+  final int tahunAjaranId;
+  final String assessmentDate;
   final String? generalNotes;
-  final String createdAt;
-  final String? evaluatorName;
-  final String? categoryName;
+  final List<AssessmentDetail>? details;
 
-  AssessmentModel({
-    required this.id,
-    required this.evaluatorId,
-    required this.siswaId,
-    required this.categoryId,
-    required this.score,
-    required this.period,
+  Assessment({
+    this.id,
+    this.evaluatorId,
+    required this.evaluateeId,
+    required this.tahunAjaranId,
+    required this.assessmentDate,
     this.generalNotes,
-    required this.createdAt,
-    this.evaluatorName,
-    this.categoryName,
+    this.details,
   });
 
-  factory AssessmentModel.fromJson(Map<String, dynamic> json) {
-    return AssessmentModel(
-      id: json['id'] ?? 0,
-      evaluatorId: json['evaluator_id'] ?? 0,
-      siswaId: json['siswa_id'] ?? 0,
-      categoryId: json['category_id'] ?? 0,
-      score: (json['score'] ?? 0).toDouble(),
-      period: json['period'] ?? '',
+  factory Assessment.fromJson(Map<String, dynamic> json) {
+    return Assessment(
+      id: json['id'],
+      evaluatorId: json['evaluator_id'],
+      evaluateeId: json['evaluatee_id'],
+      tahunAjaranId: json['tahun_ajaran_id'],
+      assessmentDate: json['assessment_date'],
       generalNotes: json['general_notes'],
-      createdAt: json['created_at'] ?? '',
-      evaluatorName: json['evaluator_name'],
-      categoryName: json['category_name'],
+      details: json['details'] != null
+          ? (json['details'] as List)
+              .map((i) => AssessmentDetail.fromJson(i))
+              .toList()
+          : null,
     );
   }
 
   Map<String, dynamic> toJson() {
     return {
-      'id': id,
-      'evaluator_id': evaluatorId,
-      'siswa_id': siswaId,
-      'category_id': categoryId,
-      'score': score,
-      'period': period,
+      'evaluatee_id': evaluateeId,
+      'tahun_ajaran_id': tahunAjaranId,
+      'assessment_date': assessmentDate,
       'general_notes': generalNotes,
-      'created_at': createdAt,
-      'evaluator_name': evaluatorName,
-      'category_name': categoryName,
+      // Sesuai controller: scores.*.question_id dan scores.*.score
+      'scores': details?.map((d) => d.toScoreJson()).toList(),
     };
   }
 }
 
-// ==================== ASSESSMENT CATEGORY MODEL ====================
-class AssessmentCategoryModel {
-  final int id;
-  final String name;
-  final String? description;
-  final int detailsCount;
+class AssessmentDetail {
+  final int questionId;
+  final int score;
+  final String? questionText;
 
-  AssessmentCategoryModel({
-    required this.id,
-    required this.name,
-    this.description,
-    this.detailsCount = 0,
-  });
-
-  factory AssessmentCategoryModel.fromJson(Map<String, dynamic> json) {
-    return AssessmentCategoryModel(
-      id: json['id'] ?? 0,
-      name: json['name'] ?? '',
-      description: json['description'],
-      detailsCount: json['details_count'] ?? 0,
-    );
-  }
-}
-
-// ==================== KATEGORI PENILAIAN (alias) ====================
-class KategoriPenilaian {
-  final int id;
-  final String name;
-  final String? description;
-
-  KategoriPenilaian({
-    required this.id,
-    required this.name,
-    this.description,
-  });
-
-  factory KategoriPenilaian.fromJson(Map<String, dynamic> json) {
-    return KategoriPenilaian(
-      id: json['id'] ?? 0,
-      name: json['name'] ?? '',
-      description: json['description'],
-    );
-  }
-}
-
-// ==================== SISWA PENILAIAN ====================
-class SiswaPenilaian {
-  final int id;
-  final String nama;
-  final String nis;
-  final String? foto;
-  final String? kelas;
-  final double? nilaiTerakhir;
-  final String? tanggalDinilai;
-
-  SiswaPenilaian({
-    required this.id,
-    required this.nama,
-    required this.nis,
-    this.foto,
-    this.kelas,
-    this.nilaiTerakhir,
-    this.tanggalDinilai,
-  });
-
-  factory SiswaPenilaian.fromJson(Map<String, dynamic> json) {
-    return SiswaPenilaian(
-      id: json['id'] ?? 0,
-      nama: json['nama'] ?? json['nama_siswa'] ?? '',
-      nis: json['nis'] ?? '-',
-      foto: json['foto'],
-      kelas: json['kelas'],
-      nilaiTerakhir: json['nilai_terakhir'] != null 
-          ? (json['nilai_terakhir'] as num).toDouble() 
-          : null,
-      tanggalDinilai: json['tanggal_dinilai'],
-    );
-  }
-}
-
-// ==================== TEACHER DASHBOARD ====================
-class TeacherDashboardModel {
-  final int totalSiswa;
-  final int dinilaiCount;
-  final double progress;
-  final List<SiswaPenilaian> belumDinilai;
-  final List<SiswaPenilaian> sudahDinilai;
-
-  TeacherDashboardModel({
-    required this.totalSiswa,
-    required this.dinilaiCount,
-    required this.progress,
-    required this.belumDinilai,
-    required this.sudahDinilai,
-  });
-
-  factory TeacherDashboardModel.fromJson(Map<String, dynamic> json) {
-    return TeacherDashboardModel(
-      totalSiswa: json['total_siswa'] ?? 0,
-      dinilaiCount: json['dinilai_count'] ?? 0,
-      progress: (json['progress'] ?? 0).toDouble(),
-      belumDinilai: (json['belum_dinilai'] as List? ?? [])
-          .map((e) => SiswaPenilaian.fromJson(e))
-          .toList(),
-      sudahDinilai: (json['sudah_dinilai'] as List? ?? [])
-          .map((e) => SiswaPenilaian.fromJson(e))
-          .toList(),
-    );
-  }
-}
-
-// ==================== STUDENT PERFORMANCE ====================
-class StudentPerformanceModel {
-  final StudentInfo student;
-  final double totalScore;
-  final List<CategoryScore> scores;
-  final List<AssessmentHistory> history;
-
-  StudentPerformanceModel({
-    required this.student,
-    required this.totalScore,
-    required this.scores,
-    required this.history,
-  });
-
-  factory StudentPerformanceModel.fromJson(Map<String, dynamic> json) {
-    return StudentPerformanceModel(
-      student: StudentInfo.fromJson(json['student'] ?? {}),
-      totalScore: (json['total_score'] ?? 0).toDouble(),
-      scores: (json['scores'] as List? ?? [])
-          .map((e) => CategoryScore.fromJson(e))
-          .toList(),
-      history: (json['history'] as List? ?? [])
-          .map((e) => AssessmentHistory.fromJson(e))
-          .toList(),
-    );
-  }
-}
-
-class StudentInfo {
-  final int id;
-  final String name;
-  final String nis;
-  final String? kelas;
-
-  StudentInfo({
-    required this.id,
-    required this.name,
-    required this.nis,
-    this.kelas,
-  });
-
-  factory StudentInfo.fromJson(Map<String, dynamic> json) {
-    return StudentInfo(
-      id: json['id'] ?? 0,
-      name: json['name'] ?? '',
-      nis: json['nis'] ?? '',
-      kelas: json['kelas'],
-    );
-  }
-}
-
-class CategoryScore {
-  final String name;
-  final double averageScore;
-
-  CategoryScore({
-    required this.name,
-    required this.averageScore,
-  });
-
-  factory CategoryScore.fromJson(Map<String, dynamic> json) {
-    return CategoryScore(
-      name: json['name'] ?? '',
-      averageScore: (json['average_score'] ?? 0).toDouble(),
-    );
-  }
-}
-
-class AssessmentHistory {
-  final int id;
-  final String period;
-  final String evaluatorName;
-  final String? generalNotes;
-  final double totalScore;
-  final List<HistoryDetail> details;
-  final String createdAt;
-
-  AssessmentHistory({
-    required this.id,
-    required this.period,
-    required this.evaluatorName,
-    this.generalNotes,
-    required this.totalScore,
-    required this.details,
-    required this.createdAt,
-  });
-
-  factory AssessmentHistory.fromJson(Map<String, dynamic> json) {
-    return AssessmentHistory(
-      id: json['id'] ?? 0,
-      period: json['period'] ?? '',
-      evaluatorName: json['evaluator_name'] ?? '',
-      generalNotes: json['general_notes'],
-      totalScore: (json['total_score'] ?? 0).toDouble(),
-      details: (json['details'] as List? ?? [])
-          .map((e) => HistoryDetail.fromJson(e))
-          .toList(),
-      createdAt: json['created_at'] ?? '',
-    );
-  }
-}
-
-class HistoryDetail {
-  final String category;
-  final double score;
-
-  HistoryDetail({
-    required this.category,
+  AssessmentDetail({
+    required this.questionId,
     required this.score,
+    this.questionText,
   });
 
-  factory HistoryDetail.fromJson(Map<String, dynamic> json) {
-    return HistoryDetail(
-      category: json['category'] ?? '',
-      score: (json['score'] ?? 0).toDouble(),
+  factory AssessmentDetail.fromJson(Map<String, dynamic> json) {
+    return AssessmentDetail(
+      questionId: json['question_id'],
+      score: int.parse(json['score'].toString()),
+      // Mengambil teks pertanyaan jika ada (dari relasi details.question)
+      questionText: json['question'] != null ? json['question']['question_text'] : null,
     );
   }
-}
 
-// ==================== TEACHER PROGRESS ====================
-class TeacherProgressModel {
-  final TeacherInfo teacher;
-  final int total;
-  final int assessed;
-  final double percentage;
-
-  TeacherProgressModel({
-    required this.teacher,
-    required this.total,
-    required this.assessed,
-    required this.percentage,
-  });
-
-  factory TeacherProgressModel.fromJson(Map<String, dynamic> json) {
-    return TeacherProgressModel(
-      teacher: TeacherInfo.fromJson(json['teacher'] ?? {}),
-      total: json['total'] ?? 0,
-      assessed: json['assessed'] ?? 0,
-      percentage: (json['percentage'] ?? 0).toDouble(),
-    );
-  }
-}
-
-class TeacherInfo {
-  final int id;
-  final String name;
-  final String? nip;
-
-  TeacherInfo({
-    required this.id,
-    required this.name,
-    this.nip,
-  });
-
-  factory TeacherInfo.fromJson(Map<String, dynamic> json) {
-    return TeacherInfo(
-      id: json['id'] ?? 0,
-      name: json['name'] ?? '',
-      nip: json['nip'],
-    );
-  }
-}
-
-// ==================== CLASS STATISTICS ====================
-class ClassStatisticsModel {
-  final String kelas;
-  final int totalSiswa;
-  final double classAverage;
-  final StudentStatistic? topStudent;
-  final StudentStatistic? lowestStudent;
-  final List<StudentStatistic> statistics;
-
-  ClassStatisticsModel({
-    required this.kelas,
-    required this.totalSiswa,
-    required this.classAverage,
-    this.topStudent,
-    this.lowestStudent,
-    required this.statistics,
-  });
-
-  factory ClassStatisticsModel.fromJson(Map<String, dynamic> json) {
-    return ClassStatisticsModel(
-      kelas: json['kelas'] ?? '',
-      totalSiswa: json['total_siswa'] ?? 0,
-      classAverage: (json['class_average'] ?? 0).toDouble(),
-      topStudent: json['top_student'] != null
-          ? StudentStatistic.fromJson(json['top_student'])
-          : null,
-      lowestStudent: json['lowest_student'] != null
-          ? StudentStatistic.fromJson(json['lowest_student'])
-          : null,
-      statistics: (json['statistics'] as List? ?? [])
-          .map((e) => StudentStatistic.fromJson(e))
-          .toList(),
-    );
-  }
-}
-
-class StudentStatistic {
-  final int siswaId;
-  final String nama;
-  final String nis;
-  final double averageScore;
-  final int totalAssessments;
-
-  StudentStatistic({
-    required this.siswaId,
-    required this.nama,
-    required this.nis,
-    required this.averageScore,
-    required this.totalAssessments,
-  });
-
-  factory StudentStatistic.fromJson(Map<String, dynamic> json) {
-    return StudentStatistic(
-      siswaId: json['siswa_id'] ?? 0,
-      nama: json['nama'] ?? '',
-      nis: json['nis'] ?? '',
-      averageScore: (json['average_score'] ?? 0).toDouble(),
-      totalAssessments: json['total_assessments'] ?? 0,
-    );
+  Map<String, dynamic> toScoreJson() {
+    return {
+      'question_id': questionId,
+      'score': score,
+    };
   }
 }

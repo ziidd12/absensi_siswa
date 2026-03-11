@@ -4,10 +4,7 @@ import 'package:absensi_siswa/screens/auth_wrapper.dart';
 import 'package:absensi_siswa/viewmodels/laporan_viewmodel.dart'; 
 import 'package:absensi_siswa/viewmodels/auth_viewmodel.dart';
 import 'package:absensi_siswa/viewmodels/kehadiran_viewmodel.dart';
-import 'package:absensi_siswa/viewmodels/teacher_dashboard_viewmodel.dart'; // TAMBAHKAN
-import 'package:absensi_siswa/viewmodels/form_penilaian_viewmodel.dart'; // TAMBAHKAN
 import 'package:absensi_siswa/viewmodels/assessment_viewmodel.dart'; // TAMBAHKAN
-import 'package:absensi_siswa/viewmodels/assessment_input_viewmodel.dart'; // TAMBAHKAN
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:intl/intl.dart'; // Tambahkan ini untuk mengatur locale default
 
@@ -32,10 +29,7 @@ void main() async {
         ChangeNotifierProvider(create: (_) => AuthViewModel()),
         ChangeNotifierProvider(create: (_) => KehadiranViewmodel()),
         ChangeNotifierProvider(create: (_) => LaporanViewmodel()),
-        ChangeNotifierProvider(create: (_) => TeacherDashboardViewModel()),
-        // ChangeNotifierProvider(create: (_) => FormPenilaianViewModel()),
         ChangeNotifierProvider(create: (_) => AssessmentViewModel()),
-        ChangeNotifierProvider(create: (_) => AssessmentInputViewModel()),
       ],
       child: const MyApp(),
     ),

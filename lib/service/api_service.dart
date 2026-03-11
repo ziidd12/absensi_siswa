@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:typed_data'; 
-import 'package:absensi_siswa/models/teacher_dashboard_model.dart';
+import 'package:absensi_siswa/models/assessment_category_model.dart';
+import 'package:absensi_siswa/models/assessment_model.dart';
+import 'package:absensi_siswa/models/assessment_report_model.dart';
 import 'package:http/http.dart' as http;
 import 'package:absensi_siswa/models/attendance_scan_model.dart';
 import 'package:absensi_siswa/models/attendance_session_model.dart';
@@ -8,7 +10,7 @@ import 'package:absensi_siswa/models/laporan_model.dart';
 import 'package:absensi_siswa/utils/token_storage.dart';
 
 class ApiService {
-  static const String baseUrl = 'https://calculous-unsculptured-ngan.ngrok-free.dev/api';
+  static const String baseUrl = 'https://cod-active-bluejay.ngrok-free.app/api';
 
   // --- HELPER HEADERS ---
   static Future<Map<String, String>> _getHeaders() async {
@@ -230,192 +232,107 @@ class ApiService {
   }
 
   // --------------------------------------------------------------------------
-  // --- FITUR PENILAIAN LAMA (Bisa kamu hapus jika sudah fix pakai yang baru) ---
+  // --- FITUR PENILAIAN BARU (SCORING METHODS) ---
   // --------------------------------------------------------------------------
 
-  // static Future<List<dynamic>> getAssessmentCategories() async {
-  //   final result = await get('assessment/categories');
-  //   if (result is Map && result.containsKey('data')) {
-  //     return result['data'];
-  //   }
-  //   return result is List ? result : [];
-  // }
-
-  // static Future<bool> submitAssessment({
-  //   required int siswaId,
-  //   required List<Map<String, dynamic>> scores,
-  //   String? notes,
-  // }) async {
-  //   final body = {
-  //     'siswa_id': siswaId,
-  //     'scores': scores,
-  //     'notes': notes,
-  //     'period': 'Semester Ganjil 2026',
-  //   };
-
-  //   try {
-  //     await post('assessment/store', body);
-  //     return true;
-  //   } catch (e) {
-  //     print("Error submit assessment: $e");
-  //     return false;
-  //   }
-  // }
-
-  // ==================== ASSESSMENT API METHODS ====================
-
-  /// Mendapatkan daftar kategori penilaian
-  static Future<List<AssessmentCategoryModel>> getAssessmentCategories() async {
+  /// 1. Ambil Struktur Form (Kategori & Pertanyaan)
+  /// Endpoint: GET /api/scoring/form-structure
+  static Future<List<AssessmentCategory>> getAssessmentForm({String type = 'student'}) async {
     try {
-      final response = await get('assessment/categories');
-      
-      if (response is Map && response.containsKey('data')) {
-        final List<dynamic> data = response['data'];
-        return data.map((e) => AssessmentCategoryModel.fromJson(e)).toList();
-      } else if (response is List) {
-        return response.map((e) => AssessmentCategoryModel.fromJson(e)).toList();
+      final result = await get('scoring/form-structure?type=$type');
+      if (result['status'] == 'success') {
+        final List<dynamic> data = result['data'];
+        return data.map((e) => AssessmentCategory.fromJson(e)).toList();
       }
-      
       return [];
     } catch (e) {
-      print('❌ Error getAssessmentCategories: $e');
+      print('❌ Error getAssessmentForm: $e');
       return [];
     }
   }
 
-  /// Menyimpan penilaian baru (untuk guru)
-  static Future<Map<String, dynamic>> submitAssessment({
-    required int siswaId,
-    required int categoryId,
-    required double score,
-    String? period,
-    String? generalNotes,
-  }) async {
+  /// 2. Ambil Daftar Siswa yang akan dinilai
+  /// Endpoint: GET /api/scoring/students-to-assess
+  static Future<List<dynamic>> getStudentsToAssess(dynamic tahunAjaranId) async {
     try {
-      final data = {
-        'siswa_id': siswaId,
-        'category_id': categoryId,
-        'score': score,
-        'period': period ?? 'Ganjil 2026',
-        'general_notes': generalNotes,
-      };
+      // 1. Panggil API dengan query parameter
+      final result = await get('scoring/students-to-assess?tahun_ajaran_id=$tahunAjaranId');
       
-      return await post('assessment/store', data);
+      print("DEBUG API RESULT: $result"); // Untuk memastikan data muncul di console
+
+      // 2. Ambil isi dari key 'data' karena Laravel membungkusnya
+      if (result is Map && result.containsKey('data')) {
+        return result['data'] as List<dynamic>;
+      }
+      
+      // 3. Fallback jika ternyata Laravel return list langsung
+      if (result is List) return result;
+      
+      return [];
+    } catch (e) {
+      print('❌ Error getStudentsToAssess: $e');
+      return [];
+    }
+  }
+
+  /// 3. Submit Penilaian (Store)
+  /// Endpoint: POST /api/scoring/submit
+  /// Data dikirim sesuai format Assessment.toJson()
+  static Future<Map<String, dynamic>> submitAssessment(Assessment assessment) async {
+    try {
+      // Menggunakan data.toJson() yang sudah kita buat di model Assessment
+      return await post('scoring/submit', assessment.toJson());
     } catch (e) {
       print('❌ Error submitAssessment: $e');
       return {'status': 'error', 'message': e.toString()};
     }
   }
 
-  /// Menyimpan penilaian dengan multiple kategori
-  static Future<Map<String, dynamic>> submitPenilaianGuru({
-    required int siswaId,
-    required Map<int, double> scores,
-    String? catatan,
-  }) async {
+  /// 4. Laporan Performa (Radar Chart & History)
+  /// Endpoint: GET /api/scoring/performance-radar
+  static Future<StudentPerformanceReport?> getPerformanceRadar({int? studentId, int? tahunAjaranId}) async {
     try {
-      List<Map<String, dynamic>> scoresList = scores.entries.map((e) {
-        return {
-          'category_id': e.key,
-          'score': e.value * 20,
-        };
-      }).toList();
-
-      final data = {
-        'siswa_id': siswaId,
-        'scores': scoresList,
-        'general_notes': catatan,
-        'period': 'Ganjil 2026',
-      };
+      String params = "";
+      if (studentId != null) params += "student_id=$studentId";
+      if (tahunAjaranId != null) params += "${params.isEmpty ? '' : '&'}tahun_ajaran_id=$tahunAjaranId";
       
-      return await post('assessment/store-batch', data);
+      final result = await get('scoring/performance-radar${params.isEmpty ? '' : '?$params'}');
+      
+      if (result['status'] == 'success') {
+        return StudentPerformanceReport.fromJson(result);
+      }
+      return null;
     } catch (e) {
-      print('❌ Error submitPenilaianGuru: $e');
-      return {'status': 'error', 'message': e.toString()};
+      print('❌ Error getPerformanceRadar: $e');
+      return null;
     }
   }
 
-  /// Mendapatkan data dashboard untuk guru
-  static Future<Map<String, dynamic>> getTeacherDashboard() async {
+  /// 5. Ringkasan Nilai Siswa
+  /// Endpoint: GET /api/scoring/summary-student
+  static Future<List<AssessmentReportData>> getSummaryStudent() async {
     try {
-      return await get('teacher/dashboard');
+      final result = await get('scoring/summary-student');
+      // Karena student() di controller mengembalikan response()->json($data) langsung
+      if (result is List) {
+        return result.map((e) => AssessmentReportData.fromJson(e)).toList();
+      }
+      return [];
     } catch (e) {
-      print('❌ Error getTeacherDashboard: $e');
+      print('❌ Error getSummaryStudent: $e');
+      return [];
+    }
+  }
+
+  /// 6. Statistik Progres Guru
+  /// Endpoint: GET /api/scoring/teacher-stats
+  static Future<Map<String, dynamic>> getTeacherStats() async {
+    try {
+      final result = await get('scoring/teacher-stats');
+      return result is Map<String, dynamic> ? result : {};
+    } catch (e) {
+      print('❌ Error getTeacherStats: $e');
       return {};
-    }
-  }
-
-  /// Mendapatkan performa siswa
-  static Future<StudentPerformanceModel?> getStudentPerformance({
-    int? studentId,
-  }) async {
-    try {
-      String endpoint = 'assessment/student-performance';
-      if (studentId != null) {
-        endpoint += '?student_id=$studentId';
-      }
-      
-      final response = await get(endpoint);
-      
-      if (response is Map<String, dynamic>) {
-        return StudentPerformanceModel.fromJson(response);
-      }
-      
-      return null;
-    } catch (e) {
-      print('❌ Error getStudentPerformance: $e');
-      return null;
-    }
-  }
-
-  /// Mendapatkan progress guru
-  static Future<TeacherProgressModel?> getTeacherProgress() async {
-    try {
-      final response = await get('assessment/teacher-progress');
-      
-      if (response is Map<String, dynamic>) {
-        return TeacherProgressModel.fromJson(response);
-      }
-      
-      return null;
-    } catch (e) {
-      print('❌ Error getTeacherProgress: $e');
-      return null;
-    }
-  }
-
-  /// Mendapatkan statistik kelas
-  static Future<ClassStatisticsModel?> getClassStatistics(int kelasId) async {
-    try {
-      final response = await get('assessment/class/$kelasId/statistics');
-      
-      if (response is Map<String, dynamic>) {
-        return ClassStatisticsModel.fromJson(response);
-      }
-      
-      return null;
-    } catch (e) {
-      print('❌ Error getClassStatistics: $e');
-      return null;
-    }
-  }
-
-  /// Mendapatkan kategori untuk form penilaian
-  static Future<List<KategoriPenilaian>> getKategoriPenilaian() async {
-    try {
-      final response = await get('assessment/categories');
-      
-      if (response is Map && response.containsKey('data')) {
-        final List<dynamic> data = response['data'];
-        return data.map((e) => KategoriPenilaian.fromJson(e)).toList();
-      } else if (response is List) {
-        return response.map((e) => KategoriPenilaian.fromJson(e)).toList();
-      }
-      
-      return [];
-    } catch (e) {
-      print('❌ Error getKategoriPenilaian: $e');
-      return [];
     }
   }
 }

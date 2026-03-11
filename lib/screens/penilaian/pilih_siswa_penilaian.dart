@@ -1,481 +1,250 @@
+import 'package:absensi_siswa/screens/penilaian/form_penilaian_screen.dart';
+import 'package:absensi_siswa/screens/penilaian/guru_assessment_report_detail_page.dart';
 import 'package:flutter/material.dart';
-import 'package:absensi_siswa/service/api_service.dart';
-import 'package:absensi_siswa/screens/guru/form_penilaian_screen.dart';
-import 'package:absensi_siswa/widgets/loading_widget.dart';
-import 'package:absensi_siswa/widgets/error_widget.dart';
-import 'package:absensi_siswa/models/teacher_dashboard_model.dart';
+import 'package:provider/provider.dart';
+import 'package:absensi_siswa/viewmodels/assessment_viewmodel.dart';
 
 class PilihSiswaPenilaianPage extends StatefulWidget {
-  const PilihSiswaPenilaianPage({Key? key}) : super(key: key);
+  const PilihSiswaPenilaianPage({super.key});
 
   @override
   State<PilihSiswaPenilaianPage> createState() => _PilihSiswaPenilaianPageState();
 }
 
 class _PilihSiswaPenilaianPageState extends State<PilihSiswaPenilaianPage> {
-  final TextEditingController _searchController = TextEditingController();
+  // Samakan warna dengan Homepage Guru
+  static const Color primaryBlue = Color(0xFF1E5EFF);
+  static const Color accentBlue = Color(0xFF2A7CFF);
+
+  Future<void> _loadData() async {
+    final vm = context.read<AssessmentViewModel>();
+    await vm.fetchStudentsToAssess(1);
+    await vm.fetchTeacherProgress();
+  }
 
   @override
   void initState() {
     super.initState();
-    Future.microtask(() => 
-      context.read<TeacherDashboardViewModel>().loadDashboard()
-    );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadData();
+    });
   }
 
   @override
   Widget build(BuildContext context) {
+    final vm = context.watch<AssessmentViewModel>();
+
     return Scaffold(
-      backgroundColor: Colors.grey.shade50,
+      backgroundColor: const Color(0xFFF6F8FC),
       appBar: AppBar(
         title: const Text(
-          'Dashboard Penilaian',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+          "Evaluasi Sikap",
+          style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black, fontSize: 18),
         ),
-        backgroundColor: const Color(0xFF0047ff),
+        backgroundColor: Colors.white,
         elevation: 0,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh, color: Colors.white),
-            onPressed: () => context.read<TeacherDashboardViewModel>().refreshData(),
-          ),
-        ],
+        centerTitle: true,
       ),
-      body: Consumer<TeacherDashboardViewModel>(
-        builder: (context, viewModel, child) {
-          if (viewModel.isLoading && viewModel.dashboardData == null) {
-            return const LoadingWidget();
-          }
-
-          if (viewModel.errorMessage != null && viewModel.dashboardData == null) {
-            return ErrorDisplayWidget(
-              message: viewModel.errorMessage!,
-              onRetry: () => viewModel.loadDashboard(),
-            );
-          }
-
-          return RefreshIndicator(
-            onRefresh: () => viewModel.refreshData(),
-            child: CustomScrollView(
-              slivers: [
-                // Progress Bar Section
-                SliverToBoxAdapter(
-                  child: _buildProgressCard(viewModel),
-                ),
-
-                // Search and Filter Section
-                SliverToBoxAdapter(
-                  child: _buildSearchAndFilter(viewModel),
-                ),
-
-                // Belum Dinilai Section
-                if (viewModel.selectedFilter != 'sudah')
-                  _buildSiswaSection(
-                    title: 'Belum Dinilai',
-                    icon: Icons.pending_actions,
-                    color: Colors.orange,
-                    siswaList: viewModel.filteredBelumDinilai,
-                    isEmpty: viewModel.filteredBelumDinilai.isEmpty &&
-                             viewModel.selectedFilter != 'sudah',
+      body: RefreshIndicator(
+        onRefresh: _loadData,
+        color: primaryBlue,
+        child: vm.isLoading && vm.students.isEmpty
+            ? const Center(child: CircularProgressIndicator(color: primaryBlue))
+            : ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.all(16),
+                children: [
+                  _buildProgressHeaderCard(vm),
+                  const SizedBox(height: 24),
+                  const Text(
+                    "Daftar Siswa",
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black),
                   ),
-
-                // Sudah Dinilai Section
-                if (viewModel.selectedFilter != 'belum')
-                  _buildSiswaSection(
-                    title: 'Sudah Dinilai',
-                    icon: Icons.check_circle,
-                    color: Colors.green,
-                    siswaList: viewModel.filteredSudahDinilai,
-                    isEmpty: viewModel.filteredSudahDinilai.isEmpty &&
-                             viewModel.selectedFilter != 'belum',
-                  ),
-
-                const SliverToBoxAdapter(child: SizedBox(height: 20)),
-              ],
-            ),
-          );
-        },
+                  const SizedBox(height: 12),
+                  if (vm.students.isEmpty)
+                    _buildEmptyState()
+                  else
+                    ListView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: vm.students.length,
+                      itemBuilder: (context, index) {
+                        final student = vm.students[index];
+                        return _buildStudentTile(context, student);
+                      },
+                    ),
+                ],
+              ),
       ),
     );
   }
 
-  Widget _buildProgressCard(TeacherDashboardViewModel viewModel) {
+  // Header Card dengan style Blue Gradient seperti di Homepage Guru
+  Widget _buildProgressHeaderCard(AssessmentViewModel vm) {
+    final int total = int.tryParse(vm.teacherProgress['total']?.toString() ?? '0') ?? 0;
+    final int done = int.tryParse(vm.teacherProgress['assessed']?.toString() ?? '0') ?? 0;
+    final double percent = (double.tryParse(vm.teacherProgress['percentage']?.toString() ?? '0') ?? 0.0) / 100.0;
+
     return Container(
-      margin: const EdgeInsets.all(16),
+      width: double.infinity,
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFF0047ff), Color(0xFF4A7BFF)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(16),
+        gradient: const LinearGradient(colors: [primaryBlue, accentBlue]),
         boxShadow: [
           BoxShadow(
-            color: Colors.blue.withOpacity(0.3),
+            color: primaryBlue.withOpacity(0.2),
             blurRadius: 10,
             offset: const Offset(0, 4),
-          ),
+          )
         ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
-            'Progress Penilaian',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
-            ),
+            "PROGRES EVALUASI",
+            style: TextStyle(color: Colors.white70, fontWeight: FontWeight.bold, fontSize: 12),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 10),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                '${viewModel.dinilaiCount} dari ${viewModel.totalSiswa} siswa',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                ),
+                "$done dari $total Siswa",
+                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white),
               ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Text(
-                  '${viewModel.progress.toStringAsFixed(1)}%',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
+              Text(
+                "${(percent * 100).toInt()}%",
+                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
               ),
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 15),
           ClipRRect(
             borderRadius: BorderRadius.circular(10),
             child: LinearProgressIndicator(
-              value: viewModel.progress / 100,
-              backgroundColor: Colors.white.withOpacity(0.3),
+              value: percent,
+              backgroundColor: Colors.white.withOpacity(0.2),
               valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
-              minHeight: 10,
+              minHeight: 8,
             ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSearchAndFilter(TeacherDashboardViewModel viewModel) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: Column(
-        children: [
-          // Search Bar
-          TextField(
-            controller: _searchController,
-            decoration: InputDecoration(
-              hintText: 'Cari nama atau NIS...',
-              prefixIcon: const Icon(Icons.search),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide.none,
-              ),
-              filled: true,
-              fillColor: Colors.white,
-              contentPadding: const EdgeInsets.symmetric(vertical: 0),
-            ),
-            onChanged: viewModel.setSearchQuery,
           ),
           const SizedBox(height: 12),
-          // Filter Chips
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: [
-                _buildFilterChip('Semua', 'semua', viewModel),
-                _buildFilterChip('Belum Dinilai', 'belum', viewModel),
-                _buildFilterChip('Sudah Dinilai', 'sudah', viewModel),
-              ],
-            ),
+          Text(
+            percent >= 1.0 ? "🎉 Luar biasa! Semua tugas selesai." : "Selesaikan penilaian untuk melihat radar chart.",
+            style: const TextStyle(color: Colors.white, fontSize: 11),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildFilterChip(String label, String value, TeacherDashboardViewModel viewModel) {
-    return Padding(
-      padding: const EdgeInsets.only(right: 8),
-      child: FilterChip(
-        label: Text(label),
-        selected: viewModel.selectedFilter == value,
-        onSelected: (_) => viewModel.setFilter(value),
-        backgroundColor: Colors.white,
-        selectedColor: const Color(0xFF0047ff).withOpacity(0.1),
-        checkmarkColor: const Color(0xFF0047ff),
-        labelStyle: TextStyle(
-          color: viewModel.selectedFilter == value 
-              ? const Color(0xFF0047ff) 
-              : Colors.black87,
-          fontWeight: viewModel.selectedFilter == value 
-              ? FontWeight.bold 
-              : FontWeight.normal,
-        ),
-      ),
+  // Student Tile dengan style _classTile dari Homepage Guru
+  Widget _buildStudentTile(BuildContext context, dynamic student) {
+    const int currentTahunAjaranId = 1;
+    final List assessments = student['assessments_received'] ?? [];
+    
+    bool isDone = assessments.any((a) => 
+      int.tryParse(a['tahun_ajaran_id']?.toString() ?? '') == currentTahunAjaranId
     );
-  }
 
-  Widget _buildSiswaSection({
-    required String title,
-    required IconData icon,
-    required Color color,
-    required List<SiswaPenilaian> siswaList,
-    required bool isEmpty,
-  }) {
-    if (isEmpty) {
-      return SliverToBoxAdapter(
+    final String nis = student['siswa']?['NIS']?.toString() ?? student['NIS']?.toString() ?? "-";
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      child: InkWell(
+        onTap: () {
+          if (isDone) {
+            Navigator.push(context, MaterialPageRoute(
+              builder: (c) => GuruAssessmentReportDetailPage(siswa: student),
+            ));
+          } else {
+            Navigator.push(context, MaterialPageRoute(
+              builder: (c) => FormPenilaianPage(student: student),
+            )).then((_) => _loadData());
+          }
+        },
+        borderRadius: BorderRadius.circular(14),
         child: Container(
-          margin: const EdgeInsets.all(16),
-          padding: const EdgeInsets.all(20),
+          padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
             color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(14),
+            border: isDone ? Border.all(color: Colors.green.shade200) : null,
+            boxShadow: [
+              BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10)
+            ],
           ),
-          child: Center(
-            child: Column(
-              children: [
-                Icon(icon, size: 48, color: Colors.grey.shade400),
-                const SizedBox(height: 8),
-                Text(
-                  'Tidak ada siswa $title',
-                  style: TextStyle(color: Colors.grey.shade600),
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
-    }
-
-    return SliverToBoxAdapter(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-            child: Row(
-              children: [
-                Icon(icon, color: color, size: 20),
-                const SizedBox(width: 8),
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: 16,
+          child: Row(
+            children: [
+              // Avatar
+              CircleAvatar(
+                radius: 22,
+                backgroundColor: isDone ? Colors.green.shade50 : primaryBlue.withOpacity(0.05),
+                child: Text(
+                  student['name']?[0] ?? "?",
+                  style: TextStyle(
+                    color: isDone ? Colors.green : primaryBlue,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
-                const SizedBox(width: 8),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: color.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    '${siswaList.length}',
-                    style: TextStyle(
-                      color: color,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 12,
+              ),
+              const SizedBox(width: 15),
+              // Nama & NIS
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      student['name'] ?? "-",
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                     ),
+                    Text(
+                      "NIS: $nis",
+                      style: const TextStyle(color: Colors.grey, fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+              // Status Indicator
+              if (isDone)
+                const Column(
+                  children: [
+                    Icon(Icons.check_circle, color: Colors.green, size: 20),
+                    Text("SELESAI", style: TextStyle(color: Colors.green, fontSize: 10, fontWeight: FontWeight.bold)),
+                  ],
+                )
+              else
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: primaryBlue,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Text(
+                    "NILAI",
+                    style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
                   ),
                 ),
-              ],
-            ),
+              const SizedBox(width: 8),
+              const Icon(Icons.chevron_right, size: 16, color: Colors.grey),
+            ],
           ),
-          ...siswaList.map((siswa) => _buildSiswaCard(siswa)),
-        ],
+        ),
       ),
     );
   }
 
-  Widget _buildSiswaCard(SiswaPenilaian siswa) {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      child: Card(
-        elevation: 2,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: InkWell(
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => FormPenilaianScreen(
-                  siswa: siswa,
-                  onSubmitted: () {
-                    context.read<TeacherDashboardViewModel>().refreshData();
-                  },
-                ),
-              ),
-            );
-          },
-          borderRadius: BorderRadius.circular(16),
-          child: Padding(
-            padding: const EdgeInsets.all(12),
-            child: Row(
-              children: [
-                // Foto/Avatar
-                CircleAvatar(
-                  radius: 28,
-                  backgroundColor: siswa.nilaiTerakhir != null
-                      ? Colors.green.shade100
-                      : Colors.grey.shade200,
-                  child: siswa.foto != null
-                      ? ClipOval(
-                          child: Image.network(
-                            siswa.foto!,
-                            fit: BoxFit.cover,
-                            width: 56,
-                            height: 56,
-                            errorBuilder: (_, __, ___) => Text(
-                              siswa.nama[0].toUpperCase(),
-                              style: const TextStyle(fontSize: 20),
-                            ),
-                          ),
-                        )
-                      : Text(
-                          siswa.nama[0].toUpperCase(),
-                          style: TextStyle(
-                            fontSize: 20,
-                            color: siswa.nilaiTerakhir != null
-                                ? Colors.green.shade700
-                                : Colors.grey.shade700,
-                          ),
-                        ),
-                ),
-                const SizedBox(width: 12),
-                // Info Siswa
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        siswa.nama,
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 2,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.blue.shade50,
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Text(
-                              'NIS: ${siswa.nis}',
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: Colors.blue.shade700,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          if (siswa.kelas != null)
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 2,
-                              ),
-                              decoration: BoxDecoration(
-                                color: Colors.purple.shade50,
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Text(
-                                siswa.kelas!,
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  color: Colors.purple.shade700,
-                                ),
-                              ),
-                            ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                // Status/Nilai
-                Column(
-                  children: [
-                    if (siswa.nilaiTerakhir != null)
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: siswa.nilaiTerakhir! >= 75
-                              ? Colors.green.shade100
-                              : siswa.nilaiTerakhir! >= 60
-                                  ? Colors.orange.shade100
-                                  : Colors.red.shade100,
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Text(
-                          siswa.nilaiTerakhir!.toStringAsFixed(1),
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.bold,
-                            color: siswa.nilaiTerakhir! >= 75
-                                ? Colors.green.shade700
-                                : siswa.nilaiTerakhir! >= 60
-                                    ? Colors.orange.shade700
-                                    : Colors.red.shade700,
-                          ),
-                        ),
-                      )
-                    else
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.orange.shade100,
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: const Text(
-                          'Belum',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.orange,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                    const SizedBox(height: 4),
-                    const Icon(Icons.chevron_right, size: 20),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ),
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        children: [
+          const SizedBox(height: 50),
+          Icon(Icons.person_search_rounded, size: 60, color: Colors.grey.shade300),
+          const SizedBox(height: 10),
+          const Text("Belum ada daftar siswa", style: TextStyle(color: Colors.grey)),
+        ],
       ),
     );
   }

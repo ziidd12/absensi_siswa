@@ -5,7 +5,7 @@ import 'package:absensi_siswa/utils/token_storage.dart';
 import 'package:http/http.dart' as http;
 
 class AuthService {
-  static const String _baseUrl = 'https://calculous-unsculptured-ngan.ngrok-free.dev/api';
+  static const String _baseUrl = 'https://cod-active-bluejay.ngrok-free.app/api';
 
   Future<bool> verifyToken(String token) async {
     final url = Uri.parse('$_baseUrl/profile'); 
