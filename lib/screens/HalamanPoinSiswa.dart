@@ -1,68 +1,45 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_rating_bar/flutter_rating_bar.dart';
-import 'package:absensi_siswa/service/api_service.dart';
+import 'package:absensi_siswa/viewmodels/score_viewmodel.dart';
+import 'package:absensi_siswa/viewmodels/auth_viewmodel.dart';
+import 'package:provider/provider.dart';
 
 class HalamanPoinSiswa extends StatefulWidget {
-  // Kita hilangkan 'required' biar nggak error merah di main_page
-  final dynamic siswaId; 
-  const HalamanPoinSiswa({super.key, this.siswaId});
+  const HalamanPoinSiswa({super.key});
 
   @override
   State<HalamanPoinSiswa> createState() => _HalamanPoinSiswaState();
 }
 
 class _HalamanPoinSiswaState extends State<HalamanPoinSiswa> {
-  bool isLoading = true;
-  Map<String, dynamic>? dataRating;
-
   @override
   void initState() {
     super.initState();
-    _loadData();
-  }
-
-  Future<void> _loadData() async {
-    // Kalau siswaId kosong, jangan nembak API dulu
-    if (widget.siswaId == null) {
-      setState(() => isLoading = false);
-      return;
-    }
-
-    try {
-      final response = await ApiService.get('penilaian-siswa/${widget.siswaId}');
-      if (mounted) {
-        setState(() {
-          dataRating = response['data'];
-          isLoading = false;
-        });
-      }
-    } catch (e) {
-      if (mounted) setState(() => isLoading = false);
-      print("Error load data: $e");
-    }
+    // Panggil data saat halaman pertama kali dibuka
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<ScoreViewModel>().fetchMyScores();
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-    if (isLoading) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
-    }
+    final authVM = Provider.of<AuthViewModel>(context);
+    final scoreVM = Provider.of<ScoreViewModel>(context);
 
-    // Kalau ID nggak ada, tampilin pesan ramah
-    if (widget.siswaId == null && dataRating == null) {
+    // 1. Cek Sesi Login
+    if (authVM.userId == null) {
       return const Scaffold(body: Center(child: Text("Sesi login tidak ditemukan.")));
     }
 
-    double disiplin = double.tryParse(dataRating?['kedisiplinan']?.toString() ?? '0') ?? 0;
-    double tim = double.tryParse(dataRating?['kerja_sama']?.toString() ?? '0') ?? 0;
-    double tanggung = double.tryParse(dataRating?['tanggung_jawab']?.toString() ?? '0') ?? 0;
-    double inisiatif = double.tryParse(dataRating?['inisiatif']?.toString() ?? '0') ?? 0;
-    double totalAvg = (disiplin + tim + tanggung + inisiatif) / 4;
+    // 2. Loading State
+    if (scoreVM.isLoading) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
 
     return Scaffold(
       backgroundColor: const Color(0xFFF1F5F9),
       body: RefreshIndicator(
-        onRefresh: _loadData,
+        onRefresh: () => scoreVM.fetchMyScores(),
         child: CustomScrollView(
           slivers: [
             _buildCompactHeader(),
@@ -75,17 +52,18 @@ class _HalamanPoinSiswaState extends State<HalamanPoinSiswa> {
                     const Text("Ringkasan Performa", 
                       style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF475569))),
                     const SizedBox(height: 12),
-                    _buildMainScoreCard(totalAvg),
+                    _buildMainScoreCard(scoreVM.totalAvg),
                     const SizedBox(height: 32),
                     const Text("Detail Penilaian", 
                       style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF475569))),
                     const SizedBox(height: 12),
-                    _buildStructuredTile("Kedisiplinan", disiplin, Icons.timer_rounded, Colors.orange),
-                    _buildStructuredTile("Kerja Sama Tim", tim, Icons.groups_rounded, Colors.blue),
-                    _buildStructuredTile("Tanggung Jawab", tanggung, Icons.verified_user_rounded, Colors.green),
-                    _buildStructuredTile("Inisiatif Kerja", inisiatif, Icons.auto_awesome_rounded, Colors.purple),
+                    // Data diambil langsung dari getter ViewModel
+                    _buildStructuredTile("Kedisiplinan", scoreVM.disiplin, Icons.timer_rounded, Colors.orange),
+                    _buildStructuredTile("Kerja Sama Tim", scoreVM.tim, Icons.groups_rounded, Colors.blue),
+                    _buildStructuredTile("Tanggung Jawab", scoreVM.tanggungJawab, Icons.verified_user_rounded, Colors.green),
+                    _buildStructuredTile("Inisiatif Kerja", scoreVM.inisiatif, Icons.auto_awesome_rounded, Colors.purple),
                     const SizedBox(height: 32),
-                    _buildFeedback(dataRating?['catatan'] ?? "Belum ada catatan pembimbing."),
+                    _buildFeedback(scoreVM.catatan),
                   ],
                 ),
               ),
@@ -95,6 +73,8 @@ class _HalamanPoinSiswaState extends State<HalamanPoinSiswa> {
       ),
     );
   }
+
+  // --- Widget tampilan tetap sama sesuai permintaan ---
 
   Widget _buildCompactHeader() {
     return SliverAppBar(
@@ -151,6 +131,7 @@ class _HalamanPoinSiswaState extends State<HalamanPoinSiswa> {
 
   Widget _buildFeedback(String note) {
     return Container(
+      width: double.infinity,
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.blueAccent.withOpacity(0.1))),
       child: Text("“$note”", style: const TextStyle(fontStyle: FontStyle.italic)),

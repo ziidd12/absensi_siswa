@@ -50,6 +50,9 @@ class KehadiranViewmodel extends ChangeNotifier {
   // 2. Definisi variabel ErrorMessage dengan benar
   String? _errorMessage;
   String? get errorMessage => _errorMessage;
+
+  List<dynamic> _riwayatReal = [];
+  List<dynamic> get riwayatReal => _riwayatReal;
   
   // Setter untuk mempermudah update error dari luar/dalam
   set errorMessage(String? value) {
@@ -74,6 +77,36 @@ class KehadiranViewmodel extends ChangeNotifier {
   String _searchQuery = "";
 
   List<Siswa> get daftarSiswa => _searchQuery.isEmpty ? _daftarSiswa : _filteredSiswa;
+
+  Future<void> fetchRiwayatSiswa() async {
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      final token = await TokenStorage.getToken();
+      final response = await http.get(
+        Uri.parse("${ApiService.baseUrl}/history-siswa"),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Accept': 'application/json',
+          'ngrok-skip-browser-warning': 'true',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        _riwayatReal = data['data']; // 'data' berasal dari return JSON Laravel
+      } else {
+        _errorMessage = "Gagal mengambil riwayat";
+      }
+    } catch (e) {
+      _errorMessage = "Koneksi Error: $e";
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
 
   // ===================== FUNGSI PENCARIAN =====================
   void searchSiswa(String query) {

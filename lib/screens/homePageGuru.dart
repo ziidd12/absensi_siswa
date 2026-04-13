@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:absensi_siswa/pages/jadwal_page.dart';
+import 'package:absensi_siswa/viewmodels/jadwal_siswa.dart';
 import 'package:absensi_siswa/viewmodels/kehadiran_viewmodel.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -7,9 +8,83 @@ import 'package:qr_flutter/qr_flutter.dart';
 import 'package:intl/intl.dart';
 import 'package:absensi_siswa/utils/token_storage.dart';
 import 'package:absensi_siswa/pages/login_page.dart';
-import 'package:absensi_siswa/pages/absensi_manual_page.dart'; 
+import 'package:absensi_siswa/pages/absensi_manual_page.dart';
 import 'package:absensi_siswa/pages/riwayat_page.dart';
 
+// --- MODEL ---
+class JadwalModel {
+  final int id;
+  final int kelasId;
+  final int mapelId;
+  final int guruId;
+  final String hari;
+  final String jamMulai;
+  final String jamSelesai;
+  final KelasRelasi kelas;
+  final MapelRelasi mapel;
+
+  JadwalModel({
+    required this.id,
+    required this.kelasId,
+    required this.mapelId,
+    required this.guruId,
+    required this.hari,
+    required this.jamMulai,
+    required this.jamSelesai,
+    required this.kelas,
+    required this.mapel,
+  });
+
+  factory JadwalModel.fromJson(Map<String, dynamic> json) {
+    return JadwalModel(
+      id: json['id'],
+      kelasId: json['kelas_id'],
+      mapelId: json['mapel_id'],
+      guruId: json['guru_id'],
+      hari: json['hari']?.toString() ?? '',
+      jamMulai: json['jam_mulai']?.toString() ?? '',
+      jamSelesai: json['jam_selesai']?.toString() ?? '',
+      kelas: KelasRelasi.fromJson(json['kelas']),
+      mapel: MapelRelasi.fromJson(json['mapel']),
+    );
+  }
+}
+
+class KelasRelasi {
+  final int id;
+  final String tingkat;
+  final String jurusan;
+  final String nomorKelas;
+
+  KelasRelasi({required this.id, required this.tingkat, required this.jurusan, required this.nomorKelas});
+
+  factory KelasRelasi.fromJson(Map<String, dynamic> json) {
+    return KelasRelasi(
+      id: json['id'],
+      tingkat: json['tingkat']?.toString() ?? '',
+      jurusan: json['jurusan']?.toString() ?? '',
+      nomorKelas: json['nomor_kelas']?.toString() ?? '', 
+    );
+  }
+
+  String get namaLengkap => "$tingkat $jurusan $nomorKelas";
+}
+
+class MapelRelasi {
+  final int id;
+  final String namaMapel;
+
+  MapelRelasi({required this.id, required this.namaMapel});
+
+  factory MapelRelasi.fromJson(Map<String, dynamic> json) {
+    return MapelRelasi(
+      id: json['id'],
+      namaMapel: json['nama_mapel']?.toString() ?? '',
+    );
+  }
+}
+
+// --- UI GURU HOME PAGE ---
 class GuruHomePage extends StatefulWidget {
   const GuruHomePage({super.key});
 
@@ -25,9 +100,12 @@ class _GuruHomePageState extends State<GuruHomePage> {
   void initState() {
     super.initState();
     _loadProfile();
-    // Update UI setiap menit agar status LIVE/SELESAI berubah otomatis
     _timer = Timer.periodic(const Duration(minutes: 1), (timer) {
       if (mounted) setState(() {});
+    });
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      Provider.of<JadwalViewModel>(context, listen: false).fetchJadwal();
     });
   }
 
@@ -42,9 +120,7 @@ class _GuruHomePageState extends State<GuruHomePage> {
     setState(() => _userName = name);
   }
 
-  // --- FUNGSI NAVIGASI DENGAN VALIDASI WAKTU ---
   void _navigateToManual(String kelas, String mapel, String timeRange) async {
-    // 1. Cek Status Waktu Dulu
     int status = _checkClassStatus(timeRange);
 
     if (status == 0) {
@@ -59,9 +135,7 @@ class _GuruHomePageState extends State<GuruHomePage> {
       return;
     }
 
-    // 2. Jika Status == 1 (LIVE), Lanjut Cek Token
     final token = await TokenStorage.getToken();
-    
     if (token == null || token.isEmpty) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -74,10 +148,7 @@ class _GuruHomePageState extends State<GuruHomePage> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => AbsensiManualPage(
-          namaKelas: kelas,
-          mapel: mapel,
-        ),
+        builder: (context) => AbsensiManualPage(namaKelas: kelas, mapel: mapel),
       ),
     );
   }
@@ -103,9 +174,9 @@ class _GuruHomePageState extends State<GuruHomePage> {
       final startTime = DateTime(now.year, now.month, now.day, int.parse(startParts[0]), int.parse(startParts[1]));
       final endTime = DateTime(now.year, now.month, now.day, int.parse(endParts[0]), int.parse(endParts[1]));
 
-      if (now.isBefore(startTime)) return 0; // Belum mulai
-      if (now.isAfter(endTime)) return 2;    // Sudah selesai
-      return 1; // Sedang berlangsung (LIVE)
+      if (now.isBefore(startTime)) return 0;
+      if (now.isAfter(endTime)) return 2;
+      return 1;
     } catch (e) {
       return 0;
     }
@@ -113,20 +184,27 @@ class _GuruHomePageState extends State<GuruHomePage> {
 
   void _openAttendance(BuildContext context) async {
     final viewModel = Provider.of<KehadiranViewmodel>(context, listen: false);
-    await viewModel.createSession(1); 
+    final jadwalVM = Provider.of<JadwalViewModel>(context, listen: false);
+
+    int targetJadwalId = 1;
+    if (jadwalVM.listJadwal.isNotEmpty) {
+      final active = jadwalVM.listJadwal.firstWhere(
+        (j) => _checkClassStatus("${j.jamMulai} - ${j.jamSelesai}") == 1,
+        orElse: () => jadwalVM.listJadwal.first
+      );
+      targetJadwalId = active.id;
+    }
+
+    await viewModel.createSession(targetJadwalId); 
 
     if (!mounted) return;
 
     if (viewModel.sessionData != null && viewModel.sessionData!.tokenQr != null) {
       _showQRDialog(context, viewModel.sessionData!.tokenQr!);
     } else {
-      String pesanError = viewModel.errorMessage ?? "Gagal: Jadwal mungkin sudah berakhir atau ID 1 tidak ada.";
+      String pesanError = viewModel.errorMessage ?? "Gagal membuat sesi absensi.";
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(pesanError), 
-          backgroundColor: Colors.red,
-          duration: const Duration(seconds: 5),
-        ),
+        SnackBar(content: Text(pesanError), backgroundColor: Colors.red),
       );
     }
   }
@@ -137,56 +215,29 @@ class _GuruHomePageState extends State<GuruHomePage> {
       barrierDismissible: false,
       builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text(
-          "Scan QR Absensi", 
-          textAlign: TextAlign.center, 
-          style: TextStyle(fontWeight: FontWeight.bold)
-        ),
+        title: const Text("Scan QR Absensi", textAlign: TextAlign.center, style: TextStyle(fontWeight: FontWeight.bold)),
         content: SizedBox(
-          width: 300, 
+          // PERBAIKAN: Memberikan batasan lebar agar tidak error Intrinsic Dimensions
+          width: MediaQuery.of(context).size.width * 0.8,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Text(
-                "Siswa silakan scan kode di bawah ini.", 
-                textAlign: TextAlign.center, 
-                style: TextStyle(fontSize: 13, color: Colors.grey)
-              ),
+              const Text("Siswa silakan scan kode di bawah ini.", textAlign: TextAlign.center, style: TextStyle(fontSize: 13, color: Colors.grey)),
               const SizedBox(height: 20),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(15),
-                  border: Border.all(color: Colors.grey.shade200),
-                ),
-                child: QrImageView(
-                  data: token, 
-                  version: QrVersions.auto, 
-                  size: 200.0,
-                  gapless: false,
-                ),
+              QrImageView(
+                data: token, 
+                version: QrVersions.auto, 
+                size: 200.0,
+                // Tambahkan padding agar QR tidak menempel ke tepi
+                padding: const EdgeInsets.all(10),
               ),
               const SizedBox(height: 15),
-              Text(
-                "Token: $token", 
-                style: const TextStyle(
-                  fontSize: 12, 
-                  fontWeight: FontWeight.bold, 
-                  color: Colors.blueAccent
-                )
-              ),
+              Text("Token: $token", style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.blueAccent)),
             ],
           ),
         ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text(
-              "Selesai & Tutup", 
-              style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)
-            ),
-          ),
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Tutup", style: TextStyle(color: Colors.red))),
         ],
       ),
     );
@@ -195,6 +246,7 @@ class _GuruHomePageState extends State<GuruHomePage> {
   @override
   Widget build(BuildContext context) {
     final kehadiranVM = Provider.of<KehadiranViewmodel>(context);
+    final jadwalVM = Provider.of<JadwalViewModel>(context);
 
     return Scaffold(
       backgroundColor: const Color(0xFFF6F8FC),
@@ -208,66 +260,57 @@ class _GuruHomePageState extends State<GuruHomePage> {
             Text(DateFormat('EEEE, d MMMM yyyy', 'id_ID').format(DateTime.now()), style: const TextStyle(fontSize: 12, color: Colors.grey)),
           ],
         ),
-        actions: [
-          IconButton(icon: const Icon(Icons.logout, color: Colors.redAccent), onPressed: _handleLogout)
-        ],
+        actions: [IconButton(icon: const Icon(Icons.logout, color: Colors.redAccent), onPressed: _handleLogout)],
       ),
       body: Stack(
         children: [
           RefreshIndicator(
-            onRefresh: () async => _loadProfile(),
+            onRefresh: () async => await jadwalVM.fetchJadwal(),
             child: SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
               padding: const EdgeInsets.all(16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   _buildHeaderCard(context, kehadiranVM),
                   const SizedBox(height: 24),
-                  
                   const Text("Menu Utama", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 12),
                   Row(
                     children: [
                       _menuButton(context, "Jadwal", Icons.calendar_month_rounded, Colors.orange, () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (context) => const JadwalPage()),
-                        );
+                        Navigator.push(context, MaterialPageRoute(builder: (context) => const JadwalPage()));
                       }),
                       const SizedBox(width: 12),
                       _menuButton(context, "Riwayat", Icons.history_rounded, Colors.purple, () {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => const RiwayatPage()),
-    );
-}),
+                        Navigator.push(context, MaterialPageRoute(builder: (context) => const RiwayatPage()));
+                      }),
                     ],
                   ),
-                  
                   const SizedBox(height: 24),
                   const Text("Jadwal Mengajar Hari Ini", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 12),
-                  
-                  _classTile(
-                    title: "Matematika - XII PPLG 1", 
-                    time: "20.10 - 21.10", 
-                    room: "LAB RPL 1", 
-                    status: _checkClassStatus("20.10 - 21.10"),
-                    onTap: () => _navigateToManual("XII PPLG 1", "Matematika", "20.10 - 21.10"),
-                  ),
-                  _classTile(
-                    title: "Matematika - XII PPLG 2", 
-                    time: "10:30 - 12:00", 
-                    room: "XII PPLG 2", 
-                    status: _checkClassStatus("10:30 - 12:00"),
-                    onTap: () => _navigateToManual("XII PPLG 2", "Matematika", "10:30 - 12:00"),
-                  ),
+                  if (jadwalVM.isLoading && jadwalVM.listJadwal.isEmpty)
+                    const Center(child: CircularProgressIndicator())
+                  else if (jadwalVM.listJadwal.isEmpty)
+                    const Center(child: Text("Tidak ada jadwal hari ini.", style: TextStyle(color: Colors.grey)))
+                  else
+                    Column(
+                      children: jadwalVM.listJadwal.map((jadwal) {
+                        final timeRange = "${jadwal.jamMulai.substring(0, 5)} - ${jadwal.jamSelesai.substring(0, 5)}";
+                        return _classTile(
+                          title: "${jadwal.mapel.namaMapel} - ${jadwal.kelas.namaLengkap}", 
+                          time: timeRange, 
+                          status: _checkClassStatus(timeRange),
+                          onTap: () => _navigateToManual(jadwal.kelas.namaLengkap, jadwal.mapel.namaMapel, timeRange),
+                        );
+                      }).toList(),
+                    ),
                 ],
               ),
             ),
           ),
-          if (kehadiranVM.isLoading)
-            const Center(child: CircularProgressIndicator()),
+          if (kehadiranVM.isLoading) const Center(child: CircularProgressIndicator()),
         ],
       ),
     );
@@ -279,11 +322,7 @@ class _GuruHomePageState extends State<GuruHomePage> {
         onTap: onTap,
         child: Container(
           padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10)],
-          ),
+          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16)),
           child: Column(
             children: [
               Icon(icon, color: color, size: 30),
@@ -313,11 +352,7 @@ class _GuruHomePageState extends State<GuruHomePage> {
           ElevatedButton.icon(
             icon: const Icon(Icons.qr_code_2),
             label: const Text("TAMPILKAN QR CODE"),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.white, foregroundColor: Colors.blueAccent,
-              minimumSize: const Size(double.infinity, 50),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            ),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.white, foregroundColor: Colors.blueAccent, minimumSize: const Size(double.infinity, 50)),
             onPressed: vm.isLoading ? null : () => _openAttendance(context),
           ),
         ],
@@ -325,19 +360,12 @@ class _GuruHomePageState extends State<GuruHomePage> {
     );
   }
 
-  Widget _classTile({
-    required String title, 
-    required String time, 
-    required String room, 
-    required int status,
-    required VoidCallback onTap,
-  }) {
+  Widget _classTile({required String title, required String time, required int status, required VoidCallback onTap}) {
     Color color = status == 1 ? Colors.blue : (status == 2 ? Colors.green : Colors.grey);
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(14),
         child: Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
@@ -354,14 +382,12 @@ class _GuruHomePageState extends State<GuruHomePage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
-                    Text("$time • $room", style: const TextStyle(color: Colors.grey, fontSize: 12)),
+                    Text(time, style: const TextStyle(color: Colors.grey, fontSize: 12)),
                   ],
                 ),
               ),
-              if (status == 1) 
-                const Badge(label: Text("LIVE"), backgroundColor: Colors.red)
-              else if (status == 2)
-                const Text("SELESAI", style: TextStyle(color: Colors.green, fontSize: 10, fontWeight: FontWeight.bold)),
+              if (status == 1) const Badge(label: Text("LIVE"), backgroundColor: Colors.red)
+              else if (status == 2) const Text("SELESAI", style: TextStyle(color: Colors.green, fontSize: 10, fontWeight: FontWeight.bold)),
               const Icon(Icons.chevron_right, size: 16, color: Colors.grey),
             ],
           ),

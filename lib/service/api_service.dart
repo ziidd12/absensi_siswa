@@ -1,8 +1,9 @@
 import 'dart:convert';
-import 'dart:typed_data'; 
+import 'dart:typed_data';
 import 'package:absensi_siswa/models/assessment_category_model.dart';
 import 'package:absensi_siswa/models/assessment_model.dart';
 import 'package:absensi_siswa/models/assessment_report_model.dart';
+import 'package:absensi_siswa/models/jadwal_model.dart';
 import 'package:http/http.dart' as http;
 import 'package:absensi_siswa/models/attendance_scan_model.dart';
 import 'package:absensi_siswa/models/attendance_session_model.dart';
@@ -40,8 +41,8 @@ class StoreItem {
 }
 
 class ApiService {
-// Ganti https menjadi http
-static const String baseUrl = 'https://calculous-unsculptured-ngan.ngrok-free.dev/api';
+  // Ganti https menjadi http
+  static const String baseUrl = 'https://cod-active-bluejay.ngrok-free.app/api';
 
   // --- HELPER HEADERS ---
   static Future<Map<String, String>> _getHeaders() async {
@@ -50,13 +51,16 @@ static const String baseUrl = 'https://calculous-unsculptured-ngan.ngrok-free.de
       'Authorization': 'Bearer $token',
       'Content-Type': 'application/json',
       'Accept': 'application/json',
-      'ngrok-skip-browser-warning': 'true', 
+      'ngrok-skip-browser-warning': 'true',
     };
   }
 
   // --- CORE REQUEST HANDLER ---
   static Future<dynamic> _handleApiRequest(
-      Future<http.Response> request, String operationType, String endpoint) async {
+    Future<http.Response> request,
+    String operationType,
+    String endpoint,
+  ) async {
     try {
       final response = await request.timeout(const Duration(seconds: 15));
       print("📤 DEBUG $endpoint [${response.statusCode}]: ${response.body}");
@@ -64,10 +68,12 @@ static const String baseUrl = 'https://calculous-unsculptured-ngan.ngrok-free.de
       if (response.statusCode >= 200 && response.statusCode < 300) {
         if (response.body.isEmpty) return null;
         final decoded = jsonDecode(response.body);
-        if (decoded is Map && decoded.containsKey('data') && !endpoint.contains('pdf')) {
+        if (decoded is Map &&
+            decoded.containsKey('data') &&
+            !endpoint.contains('pdf')) {
           return decoded['data'];
         }
-        return decoded; 
+        return decoded;
       } else {
         throw Exception('Gagal $operationType. Status: ${response.statusCode}');
       }
@@ -78,38 +84,50 @@ static const String baseUrl = 'https://calculous-unsculptured-ngan.ngrok-free.de
 
   static Future<dynamic> get(String endpoint) async {
     final headers = await _getHeaders();
-    
+
     // Ini print buat kita pantau di terminal biar ketahuan tokennya masuk gak
     print("🚀 Request ke: $endpoint | Token: ${headers['Authorization']}");
 
-    final response = await http.get(
-      Uri.parse('$baseUrl/$endpoint'), 
-      headers: headers
-    ).timeout(const Duration(seconds: 15));
-    
+    final response = await http
+        .get(Uri.parse('$baseUrl/$endpoint'), headers: headers)
+        .timeout(const Duration(seconds: 15));
+
     if (response.statusCode >= 200 && response.statusCode < 300) {
       return jsonDecode(response.body);
     } else {
       // Ini penting biar maneh tau error aslinya dari Laravel apa
-      print("❌ API GET ERROR [$endpoint]: ${response.statusCode} - ${response.body}");
-      throw Exception('Gagal mengambil data dari $endpoint (Status: ${response.statusCode})');
+      print(
+        "❌ API GET ERROR [$endpoint]: ${response.statusCode} - ${response.body}",
+      );
+      throw Exception(
+        'Gagal mengambil data dari $endpoint (Status: ${response.statusCode})',
+      );
     }
   }
 
   // --- FUNGSI POST UMUM ---
-  static Future<Map<String, dynamic>> post(String endpoint, Map<String, dynamic> data) async {
+  static Future<Map<String, dynamic>> post(
+    String endpoint,
+    Map<String, dynamic> data,
+  ) async {
     final headers = await _getHeaders();
-    final response = await http.post(
-      Uri.parse('$baseUrl/$endpoint'),
-      headers: headers,
-      body: jsonEncode(data),
-    ).timeout(const Duration(seconds: 15));
+    final response = await http
+        .post(
+          Uri.parse('$baseUrl/$endpoint'),
+          headers: headers,
+          body: jsonEncode(data),
+        )
+        .timeout(const Duration(seconds: 15));
 
     if (response.statusCode >= 200 && response.statusCode < 300) {
       return jsonDecode(response.body);
     } else {
-      print("❌ API POST ERROR [$endpoint]: ${response.statusCode} - ${response.body}");
-      throw Exception('Gagal mengirim data ke $endpoint (Status: ${response.statusCode})');
+      print(
+        "❌ API POST ERROR [$endpoint]: ${response.statusCode} - ${response.body}",
+      );
+      throw Exception(
+        'Gagal mengirim data ke $endpoint (Status: ${response.statusCode})',
+      );
     }
   }
 
@@ -117,43 +135,68 @@ static const String baseUrl = 'https://calculous-unsculptured-ngan.ngrok-free.de
   // --- FITUR PENILAIAN BARU (STUDENT RATINGS) ---
   // --------------------------------------------------------------------------
 
-  static Future<Map<String, dynamic>> simpanPenilaian(Map<String, dynamic> data) async {
+  static Future<Map<String, dynamic>> simpanPenilaian(
+    Map<String, dynamic> data,
+  ) async {
     // Menembak ke Route::post('/simpan-penilaian') yang baru kita buat di Laravel
-    return await post('simpan-penilaian', data);
+    return await post('scoring/submit', data);
   }
 
-  static Future<Map<String, dynamic>> ambilPenilaianSiswa(int siswaId) async {
-    // Fungsi untuk mengambil nilai yang sudah masuk ke database untuk ditampilkan di HP Siswa
-    final result = await get('penilaian-siswa/$siswaId');
-    return (result is Map<String, dynamic>) ? result : {};
+  static Future<Map<String, dynamic>> ambilPenilaianSiswa() async {
+    try {
+      // Memanggil endpoint scoring/summary-student
+      final result = await get('scoring/summary-student');
+      
+      // Jika Laravel mengembalikan List dalam key 'data', kita ambil index pertama
+      if (result['data'] is List && result['data'].isNotEmpty) {
+        return result['data'][0];
+      }
+      return result['data'] ?? {};
+    } catch (e) {
+      print('❌ Error ambilPenilaianSiswa: $e');
+      return {};
+    }
   }
 
   // --------------------------------------------------------------------------
   // --- SISWA & ATTENDANCE METHODS ---
   // --------------------------------------------------------------------------
 
-  static Future<bool> saveManualAttendance(int jadwalId, List<dynamic> daftarSiswa) async {
+  static Future<bool> saveManualAttendance(
+    int jadwalId,
+    List<dynamic> daftarSiswa,
+  ) async {
     final headers = await _getHeaders();
-    
+
     final body = jsonEncode({
       'jadwal_id': jadwalId,
-      'absensi': daftarSiswa.map((s) => {
-        'siswa_id': s.id,
-        'status': (s.status == 'Belum' || s.status == null) ? 'H' : s.status, 
-      }).toList(),
+      'absensi': daftarSiswa
+          .map(
+            (s) => {
+              'siswa_id': s.id,
+              'status': (s.status == 'Belum' || s.status == null)
+                  ? 'H'
+                  : s.status,
+            },
+          )
+          .toList(),
     });
 
-    final response = await http.post(
-      Uri.parse('$baseUrl/attendance/manual'),
-      headers: headers,
-      body: body,
-    ).timeout(const Duration(seconds: 15));
+    final response = await http
+        .post(
+          Uri.parse('$baseUrl/attendance/manual'),
+          headers: headers,
+          body: body,
+        )
+        .timeout(const Duration(seconds: 15));
 
     print("📤 SAVE MANUAL [${response.statusCode}]: ${response.body}");
     return response.statusCode == 200 || response.statusCode == 201;
   }
 
-  static Future<attendanceSessionModel?> createAttendanceSession(int jadwalId) async {
+  static Future<attendanceSessionModel?> createAttendanceSession(
+    int jadwalId,
+  ) async {
     final result = await _handleApiRequest(
       http.post(
         Uri.parse('$baseUrl/attendance/session'),
@@ -168,7 +211,11 @@ static const String baseUrl = 'https://calculous-unsculptured-ngan.ngrok-free.de
     return null;
   }
 
-  static Future<attendanceScanModel?> scanQR(String tokenQr, double lat, double lng) async {
+  static Future<attendanceScanModel?> scanQR(
+    String tokenQr,
+    double lat,
+    double lng,
+  ) async {
     final result = await _handleApiRequest(
       http.post(
         Uri.parse('$baseUrl/attendance/scan'),
@@ -187,19 +234,25 @@ static const String baseUrl = 'https://calculous-unsculptured-ngan.ngrok-free.de
     return null;
   }
 
-  Future<http.Response> postAbsensi(String tokenQr, double lat, double long) async {
+  Future<http.Response> postAbsensi(
+    String tokenQr,
+    double lat,
+    double long,
+  ) async {
     final headers = await _getHeaders();
     final url = Uri.parse('$baseUrl/attendance/scan');
 
-    return await http.post(
-      url,
-      headers: headers,
-      body: jsonEncode({
-        'token_qr': tokenQr,
-        'lat_siswa': lat, 
-        'long_siswa': long, 
-      }),
-    ).timeout(const Duration(seconds: 15));
+    return await http
+        .post(
+          url,
+          headers: headers,
+          body: jsonEncode({
+            'token_qr': tokenQr,
+            'lat_siswa': lat,
+            'long_siswa': long,
+          }),
+        )
+        .timeout(const Duration(seconds: 15));
   }
 
   // --------------------------------------------------------------------------
@@ -215,14 +268,17 @@ static const String baseUrl = 'https://calculous-unsculptured-ngan.ngrok-free.de
   }) async {
     final headers = await _getHeaders();
     Map<String, String> queryParameters = {};
-    
+
     if (tingkat != null) queryParameters['tingkat'] = tingkat;
     if (jurusan != null) queryParameters['jurusan'] = jurusan;
     if (status != null) queryParameters['status'] = status;
-    if (tahunAjaranId != null) queryParameters['tahun_ajaran_id'] = tahunAjaranId;
+    if (tahunAjaranId != null)
+      queryParameters['tahun_ajaran_id'] = tahunAjaranId;
     if (page != null) queryParameters['page'] = page.toString();
 
-    final uri = Uri.parse('$baseUrl/laporan/kehadiran').replace(queryParameters: queryParameters);
+    final uri = Uri.parse(
+      '$baseUrl/laporan/kehadiran',
+    ).replace(queryParameters: queryParameters);
     final response = await http.get(uri, headers: headers);
 
     if (response.statusCode == 200) {
@@ -248,12 +304,14 @@ static const String baseUrl = 'https://calculous-unsculptured-ngan.ngrok-free.de
       if (tahunAjaranId != null) 'tahun_ajaran_id': tahunAjaranId,
     };
 
-    final uri = Uri.parse('$baseUrl/laporan/kehadiran/pdf').replace(queryParameters: queryParams);
+    final uri = Uri.parse(
+      '$baseUrl/laporan/kehadiran/pdf',
+    ).replace(queryParameters: queryParams);
     final response = await http.get(uri, headers: headers);
 
     if (response.statusCode == 200) {
       final bytes = response.bodyBytes;
-      if (bytes.length > 4 && bytes[0] == 0x25 && bytes[1] == 0x50) { 
+      if (bytes.length > 4 && bytes[0] == 0x25 && bytes[1] == 0x50) {
         return bytes;
       }
       throw Exception("Respon server bukan file PDF valid.");
@@ -263,7 +321,7 @@ static const String baseUrl = 'https://calculous-unsculptured-ngan.ngrok-free.de
   }
 
   static Future<Map<String, dynamic>> fetchMasterData() async {
-    final result = await get('academic/master-data'); 
+    final result = await get('academic/master-data');
     return (result != null) ? result : {};
   }
 
@@ -272,7 +330,9 @@ static const String baseUrl = 'https://calculous-unsculptured-ngan.ngrok-free.de
   // --------------------------------------------------------------------------
 
   /// 1. Ambil Struktur Form (Kategori & Pertanyaan)
-  static Future<List<AssessmentCategory>> getAssessmentForm({String type = 'student'}) async {
+  static Future<List<AssessmentCategory>> getAssessmentForm({
+    String type = 'student',
+  }) async {
     try {
       final result = await get('scoring/form-structure?type=$type');
       if (result['status'] == 'success') {
@@ -287,9 +347,13 @@ static const String baseUrl = 'https://calculous-unsculptured-ngan.ngrok-free.de
   }
 
   /// 2. Ambil Daftar Siswa yang akan dinilai
-  static Future<List<dynamic>> getStudentsToAssess(dynamic tahunAjaranId) async {
+  static Future<List<dynamic>> getStudentsToAssess(
+    dynamic tahunAjaranId,
+  ) async {
     try {
-      final result = await get('scoring/students-to-assess?tahun_ajaran_id=$tahunAjaranId');
+      final result = await get(
+        'scoring/students-to-assess?tahun_ajaran_id=$tahunAjaranId',
+      );
       if (result is Map && result.containsKey('data')) {
         return result['data'] as List<dynamic>;
       }
@@ -302,7 +366,9 @@ static const String baseUrl = 'https://calculous-unsculptured-ngan.ngrok-free.de
   }
 
   /// 3. Submit Penilaian (Store)
-  static Future<Map<String, dynamic>> submitAssessment(Assessment assessment) async {
+  static Future<Map<String, dynamic>> submitAssessment(
+    Assessment assessment,
+  ) async {
     try {
       return await post('scoring/submit', assessment.toJson());
     } catch (e) {
@@ -312,14 +378,20 @@ static const String baseUrl = 'https://calculous-unsculptured-ngan.ngrok-free.de
   }
 
   /// 4. Laporan Performa (Radar Chart & History)
-  static Future<StudentPerformanceReport?> getPerformanceRadar({int? studentId, int? tahunAjaranId}) async {
+  static Future<StudentPerformanceReport?> getPerformanceRadar({
+    int? studentId,
+    int? tahunAjaranId,
+  }) async {
     try {
       String params = "";
       if (studentId != null) params += "student_id=$studentId";
-      if (tahunAjaranId != null) params += "${params.isEmpty ? '' : '&'}tahun_ajaran_id=$tahunAjaranId";
-      
-      final result = await get('scoring/performance-radar${params.isEmpty ? '' : '?$params'}');
-      
+      if (tahunAjaranId != null)
+        params += "${params.isEmpty ? '' : '&'}tahun_ajaran_id=$tahunAjaranId";
+
+      final result = await get(
+        'scoring/performance-radar${params.isEmpty ? '' : '?$params'}',
+      );
+
       if (result['status'] == 'success') {
         return StudentPerformanceReport.fromJson(result);
       }
@@ -358,7 +430,7 @@ static const String baseUrl = 'https://calculous-unsculptured-ngan.ngrok-free.de
   // --------------------------------------------------------------------------
   // --- FITUR POIN STORE BARU ---
   // --------------------------------------------------------------------------
-  
+
   static Future<int> getStorePoints(int siswaId) async {
     try {
       final result = await get('siswa/store/points/$siswaId');
@@ -376,7 +448,7 @@ static const String baseUrl = 'https://calculous-unsculptured-ngan.ngrok-free.de
   static Future<List<StoreItem>> getStoreItems() async {
     try {
       final result = await get('store-items');
-      
+
       // Biar aman baca JSON dari Laravel, mau ada wrapper 'data' atau gak
       List<dynamic> data;
       if (result is Map && result.containsKey('data')) {
@@ -390,6 +462,28 @@ static const String baseUrl = 'https://calculous-unsculptured-ngan.ngrok-free.de
     } catch (e) {
       print('❌ Error getStoreItems: $e');
       return [];
+    }
+  }
+
+  // --- JADWAL METHODS ---
+  static Future<List<JadwalModel>> getJadwalHariIni() async {
+    try {
+      // Endpoint ini memanggil JadwalController@index yang sudah kita buat hybrid
+      final result = await get('jadwal-hari-ini');
+      
+      List<dynamic> data;
+      if (result is Map && result.containsKey('data')) {
+        data = result['data'];
+      } else if (result is List) {
+        data = result;
+      } else {
+        return [];
+      }
+
+      return data.map((e) => JadwalModel.fromJson(e)).toList();
+    } catch (e) {
+      print('❌ Error getJadwalHariIni: $e');
+      rethrow;
     }
   }
 }

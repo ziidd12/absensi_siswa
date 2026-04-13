@@ -1,13 +1,41 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:absensi_siswa/viewmodels/kehadiran_viewmodel.dart';
+import 'package:intl/intl.dart'; // Tambahkan intl di pubspec.yaml untuk format tanggal
 
-class RiwayatScreen extends StatelessWidget {
+class RiwayatScreen extends StatefulWidget {
   const RiwayatScreen({super.key});
+
+  @override
+  State<RiwayatScreen> createState() => _RiwayatScreenState();
+}
+
+class _RiwayatScreenState extends State<RiwayatScreen> {
+  @override
+  void initState() {
+    super.initState();
+    // Memanggil data riwayat dari API saat halaman dibuka
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<KehadiranViewmodel>().fetchRiwayatSiswa();
+    });
+  }
+
+  // Fungsi pembantu untuk mengelompokkan data berdasarkan tanggal
+  Map<String, List<dynamic>> groupHistoryByDate(List<dynamic> history) {
+    Map<String, List<dynamic>> grouped = {};
+    for (var item in history) {
+      // Ambil tanggal saja dari waktu_scan (YYYY-MM-DD)
+      String date = item['waktu_scan'].toString().split(' ')[0];
+      if (grouped[date] == null) grouped[date] = [];
+      grouped[date]!.add(item);
+    }
+    return grouped;
+  }
 
   @override
   Widget build(BuildContext context) {
     final vm = context.watch<KehadiranViewmodel>();
+    final groupedData = groupHistoryByDate(vm.riwayatReal);
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFF),
@@ -17,43 +45,64 @@ class RiwayatScreen extends StatelessWidget {
         elevation: 0,
         iconTheme: const IconThemeData(color: Colors.black),
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(20),
-        children: [
-          const Text(
-            "Minggu Ini",
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 15),
-          
-          // Bagian ini yang kamu mau: ExpansionTile (Bisa diklik & muncul detail)
-          Card(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-            elevation: 2,
-            child: ExpansionTile(
-              leading: const Icon(Icons.calendar_month, color: Colors.blue),
-              title: const Text(
-                "Senin, 02 Maret 2026", // Header Hari
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-              subtitle: Text("${vm.jadwalSiswa.length} Mata Pelajaran"),
-              childrenPadding: const EdgeInsets.symmetric(horizontal: 15, vertical: 10),
-              children: vm.jadwalSiswa.map((item) {
-                // Ini Detail yang muncul pas diklik
-                return _buildDetailItem(item.nama, item.jam, item.isAbsen);
-              }).toList(),
+      body: vm.isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : ListView(
+              padding: const EdgeInsets.all(20),
+              children: [
+                const Text(
+                  "Aktivitas Absensi",
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 15),
+
+                if (vm.riwayatReal.isEmpty)
+                  const Center(
+                    child: Padding(
+                      padding: EdgeInsets.only(top: 50),
+                      child: Text("Belum ada riwayat absensi."),
+                    ),
+                  ),
+
+                // Menampilkan riwayat berdasarkan tanggal secara dinamis
+                ...groupedData.entries.map((entry) {
+                  String tanggalRaw = entry.key;
+                  List<dynamic> listMapel = entry.value;
+
+                  return Card(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                    elevation: 2,
+                    child: ExpansionTile(
+                      leading: const Icon(Icons.calendar_month, color: Colors.blue),
+                      title: Text(
+                        // Mengubah YYYY-MM-DD menjadi format yang lebih enak dibaca
+                        tanggalRaw, 
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      subtitle: Text("${listMapel.length} Mata Pelajaran"),
+                      childrenPadding: const EdgeInsets.symmetric(horizontal: 15, vertical: 10),
+                      children: listMapel.map((item) {
+                        // Ambil jam dari waktu_scan
+                        String jamScan = item['waktu_scan'].toString().split(' ')[1].substring(0, 5);
+                        String namaMapel = item['sesi']['jadwal']['mapel']['nama_mapel'] ?? "Mapel";
+                        bool isHadir = item['status'] == 'hadir';
+
+                        return _buildDetailItem(namaMapel, "Absen pada: $jamScan", isHadir);
+                      }).toList(),
+                    ),
+                  );
+                }).toList(),
+
+                const SizedBox(height: 10),
+                const Text("Hari Lainnya", style: TextStyle(color: Colors.grey, fontSize: 12)),
+                const SizedBox(height: 10),
+                _buildLockedDay("Riwayat Terlampaui"),
+              ],
             ),
-          ),
-          
-          const SizedBox(height: 10),
-          _buildLockedDay("Selasa, 03 Maret 2026"),
-          _buildLockedDay("Rabu, 04 Maret 2026"),
-        ],
-      ),
     );
   }
 
-  // Widget untuk isi detail di dalam ExpansionTile
   Widget _buildDetailItem(String title, String time, bool isHadir) {
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
@@ -87,7 +136,7 @@ class RiwayatScreen extends StatelessWidget {
               borderRadius: BorderRadius.circular(5),
             ),
             child: Text(
-              isHadir ? "HADIR" : "Belum Di Mulai",
+              isHadir ? "HADIR" : "TIDAK HADIR",
               style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
             ),
           ),
@@ -96,7 +145,6 @@ class RiwayatScreen extends StatelessWidget {
     );
   }
 
-  // Widget buat hari lain yang belum ada datanya
   Widget _buildLockedDay(String date) {
     return Card(
       color: Colors.grey.shade100,
