@@ -250,10 +250,10 @@ class _GuruHomePageState extends State<GuruHomePage> {
                   
                   _classTile(
                     title: "Matematika - XII PPLG 1", 
-                    time: "07.10 - 09.10", 
+                    time: "20.10 - 21.10", 
                     room: "LAB RPL 1", 
-                    status: _checkClassStatus("07.10 - 09.10"),
-                    onTap: () => _navigateToManual("XII PPLG 1", "Matematika", "07.10 - 09.10"),
+                    status: _checkClassStatus("20.10 - 21.10"),
+                    onTap: () => _navigateToManual("XII PPLG 1", "Matematika", "20.10 - 21.10"),
                   ),
                   _classTile(
                     title: "Matematika - XII PPLG 2", 

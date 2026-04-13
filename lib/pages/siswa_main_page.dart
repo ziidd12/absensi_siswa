@@ -1,8 +1,8 @@
 import 'package:absensi_siswa/screens/home_screen_siswa.dart';
-import 'package:absensi_siswa/screens/penilaian/siswa_assessment_report_page.dart';
 import 'package:absensi_siswa/screens/profile_screen.dart';
 import 'package:absensi_siswa/screens/riwayat_screen.dart';
-import 'package:absensi_siswa/screens/HalamanPoinSiswa.dart'; // Import halaman poin
+import 'package:absensi_siswa/screens/HalamanPoinSiswa.dart'; 
+import 'package:absensi_siswa/screens/store_page.dart'; // Import halaman store baru
 import 'package:flutter/material.dart';
 
 class SiswaMainPage extends StatefulWidget {
@@ -15,20 +15,16 @@ class SiswaMainPage extends StatefulWidget {
 class _SiswaMainPageState extends State<SiswaMainPage> {
   int _currentIndex = 0;
 
-  // GUNAKAN ID DARI DATABASE KAMU
-  // Misal kita mau login sebagai Ahmad Zidan, maka pakai angka 1
-  final int currentSiswaId = 1; 
-
   @override
   Widget build(BuildContext context) {
-    // List halaman ditaruh di dalam build
+    // List halaman - Urutan sesuai dengan item di BottomNavigationBar
     final List<Widget> _pages = [
-      const HomeScreenSiswa(),
-      const RiwayatScreen(),
-      SiswaAssessmentReportPage(),
-      const ProfilePage(),
+      const HomeScreenSiswa(),    // Index 0
+      const RiwayatScreen(),      // Index 1
+      const HalamanPoinSiswa(),   // Index 2 (Poin Penilaian Guru)
+      const StorePage(),          // Index 3 (Store & Poin Absen)
+      const ProfilePage(),        // Index 4
     ];
-    
 
     return Scaffold(
       backgroundColor: const Color(0xFFF2F4F7),
@@ -36,7 +32,7 @@ class _SiswaMainPageState extends State<SiswaMainPage> {
         child: _pages[_currentIndex],
       ),
       bottomNavigationBar: Container(
-        margin: const EdgeInsets.all(12),
+        margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(25),
@@ -61,7 +57,9 @@ class _SiswaMainPageState extends State<SiswaMainPage> {
             elevation: 0,
             selectedItemColor: Colors.blueAccent,
             unselectedItemColor: Colors.grey,
-            type: BottomNavigationBarType.fixed,
+            type: BottomNavigationBarType.fixed, // Tetap fixed meskipun 5 menu
+            selectedFontSize: 12,
+            unselectedFontSize: 10,
             items: const [
               BottomNavigationBarItem(
                 icon: Icon(Icons.home_rounded),
@@ -73,7 +71,11 @@ class _SiswaMainPageState extends State<SiswaMainPage> {
               ),
               BottomNavigationBarItem(
                 icon: Icon(Icons.stars_rounded), 
-                label: 'Poin',
+                label: 'Penilaian Guru',
+              ),
+              BottomNavigationBarItem(
+                icon: Icon(Icons.shopping_bag_rounded), 
+                label: 'Item', // Fitur Store baru
               ),
               BottomNavigationBarItem(
                 icon: Icon(Icons.person_rounded),

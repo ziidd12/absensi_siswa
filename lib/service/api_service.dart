@@ -9,8 +9,39 @@ import 'package:absensi_siswa/models/attendance_session_model.dart';
 import 'package:absensi_siswa/models/laporan_model.dart';
 import 'package:absensi_siswa/utils/token_storage.dart';
 
+// --- MODEL STORE ITEM (DITAMBAHKAN BIAR BISA DIPAKAI DI SERVICE) ---
+class StoreItem {
+  final int id;
+  final String namaItem;
+  final int hargaPoin;
+  final String icon;
+  final String warna;
+  final int stok;
+
+  StoreItem({
+    required this.id,
+    required this.namaItem,
+    required this.hargaPoin,
+    required this.icon,
+    required this.warna,
+    required this.stok,
+  });
+
+  factory StoreItem.fromJson(Map<String, dynamic> json) {
+    return StoreItem(
+      id: json['id'] ?? 0,
+      namaItem: json['nama_item'] ?? '',
+      hargaPoin: json['harga_poin'] ?? 0,
+      icon: json['icon'] ?? 'fastfood',
+      warna: json['warna'] ?? 'orange',
+      stok: json['stok'] ?? 0,
+    );
+  }
+}
+
 class ApiService {
-  static const String baseUrl = 'https://cod-active-bluejay.ngrok-free.app/api';
+// Ganti https menjadi http
+static const String baseUrl = 'https://calculous-unsculptured-ngan.ngrok-free.dev/api';
 
   // --- HELPER HEADERS ---
   static Future<Map<String, String>> _getHeaders() async {
@@ -47,6 +78,10 @@ class ApiService {
 
   static Future<dynamic> get(String endpoint) async {
     final headers = await _getHeaders();
+    
+    // Ini print buat kita pantau di terminal biar ketahuan tokennya masuk gak
+    print("🚀 Request ke: $endpoint | Token: ${headers['Authorization']}");
+
     final response = await http.get(
       Uri.parse('$baseUrl/$endpoint'), 
       headers: headers
@@ -55,6 +90,7 @@ class ApiService {
     if (response.statusCode >= 200 && response.statusCode < 300) {
       return jsonDecode(response.body);
     } else {
+      // Ini penting biar maneh tau error aslinya dari Laravel apa
       print("❌ API GET ERROR [$endpoint]: ${response.statusCode} - ${response.body}");
       throw Exception('Gagal mengambil data dari $endpoint (Status: ${response.statusCode})');
     }
@@ -236,7 +272,6 @@ class ApiService {
   // --------------------------------------------------------------------------
 
   /// 1. Ambil Struktur Form (Kategori & Pertanyaan)
-  /// Endpoint: GET /api/scoring/form-structure
   static Future<List<AssessmentCategory>> getAssessmentForm({String type = 'student'}) async {
     try {
       final result = await get('scoring/form-structure?type=$type');
@@ -252,22 +287,13 @@ class ApiService {
   }
 
   /// 2. Ambil Daftar Siswa yang akan dinilai
-  /// Endpoint: GET /api/scoring/students-to-assess
   static Future<List<dynamic>> getStudentsToAssess(dynamic tahunAjaranId) async {
     try {
-      // 1. Panggil API dengan query parameter
       final result = await get('scoring/students-to-assess?tahun_ajaran_id=$tahunAjaranId');
-      
-      print("DEBUG API RESULT: $result"); // Untuk memastikan data muncul di console
-
-      // 2. Ambil isi dari key 'data' karena Laravel membungkusnya
       if (result is Map && result.containsKey('data')) {
         return result['data'] as List<dynamic>;
       }
-      
-      // 3. Fallback jika ternyata Laravel return list langsung
       if (result is List) return result;
-      
       return [];
     } catch (e) {
       print('❌ Error getStudentsToAssess: $e');
@@ -276,11 +302,8 @@ class ApiService {
   }
 
   /// 3. Submit Penilaian (Store)
-  /// Endpoint: POST /api/scoring/submit
-  /// Data dikirim sesuai format Assessment.toJson()
   static Future<Map<String, dynamic>> submitAssessment(Assessment assessment) async {
     try {
-      // Menggunakan data.toJson() yang sudah kita buat di model Assessment
       return await post('scoring/submit', assessment.toJson());
     } catch (e) {
       print('❌ Error submitAssessment: $e');
@@ -289,7 +312,6 @@ class ApiService {
   }
 
   /// 4. Laporan Performa (Radar Chart & History)
-  /// Endpoint: GET /api/scoring/performance-radar
   static Future<StudentPerformanceReport?> getPerformanceRadar({int? studentId, int? tahunAjaranId}) async {
     try {
       String params = "";
@@ -309,11 +331,9 @@ class ApiService {
   }
 
   /// 5. Ringkasan Nilai Siswa
-  /// Endpoint: GET /api/scoring/summary-student
   static Future<List<AssessmentReportData>> getSummaryStudent() async {
     try {
       final result = await get('scoring/summary-student');
-      // Karena student() di controller mengembalikan response()->json($data) langsung
       if (result is List) {
         return result.map((e) => AssessmentReportData.fromJson(e)).toList();
       }
@@ -325,7 +345,6 @@ class ApiService {
   }
 
   /// 6. Statistik Progres Guru
-  /// Endpoint: GET /api/scoring/teacher-stats
   static Future<Map<String, dynamic>> getTeacherStats() async {
     try {
       final result = await get('scoring/teacher-stats');
@@ -333,6 +352,44 @@ class ApiService {
     } catch (e) {
       print('❌ Error getTeacherStats: $e');
       return {};
+    }
+  }
+
+  // --------------------------------------------------------------------------
+  // --- FITUR POIN STORE BARU ---
+  // --------------------------------------------------------------------------
+  
+  static Future<int> getStorePoints(int siswaId) async {
+    try {
+      final result = await get('siswa/store/points/$siswaId');
+      if (result != null && result['status'] == 'success') {
+        return result['points'] ?? 0;
+      }
+      return 0;
+    } catch (e) {
+      print('❌ Error getStorePoints: $e');
+      return 0;
+    }
+  }
+
+  // --- AMBIL DAFTAR ITEM STORE DARI DATABASE ---
+  static Future<List<StoreItem>> getStoreItems() async {
+    try {
+      final result = await get('store-items');
+      
+      // Biar aman baca JSON dari Laravel, mau ada wrapper 'data' atau gak
+      List<dynamic> data;
+      if (result is Map && result.containsKey('data')) {
+        data = result['data'];
+      } else if (result is List) {
+        data = result;
+      } else {
+        return [];
+      }
+      return data.map((e) => StoreItem.fromJson(e)).toList();
+    } catch (e) {
+      print('❌ Error getStoreItems: $e');
+      return [];
     }
   }
 }

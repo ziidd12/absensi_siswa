@@ -62,9 +62,9 @@ class JadwalPage extends StatelessWidget {
               const SizedBox(height: 15),
               
               // Contoh Item Detail (Nanti di-looping pakai data API)
-              _buildDetailItem("Matematika", "XII PPLG 2", "07:15 - 09:00", "LAB RPL 1"),
+              _buildDetailItem("Matematika", "XII PPLG 2", "20:10 - 21:10", "LAB RPL 1"),
               const Divider(),
-              _buildDetailItem("Matematika", "XII PPLG 1", "09:15 - 11:00", "LAB RPL 1"),
+              _buildDetailItem("Matematika", "XII PPLG 1", "20:10 - 21:10", "LAB RPL 1"),
               
               const SizedBox(height: 10),
             ],

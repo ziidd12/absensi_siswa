@@ -62,7 +62,7 @@ class KehadiranViewmodel extends ChangeNotifier {
 
   // Data Dummy untuk UI Siswa (Bisa kamu hapus jika nanti sudah pakai API Jadwal)
   List<Pelajaran> _jadwalSiswa = [
-    Pelajaran(nama: "Matematika", jam: "07.10 - 09.10"),
+    Pelajaran(nama: "Matematika", jam: "20:10 - 21:10"),
     Pelajaran(nama: "B. Indonesia", jam: "09.25 - 11.25"),
     Pelajaran(nama: "Konsentrasi RPL", jam: "12.30 - 14.30"),
     Pelajaran(nama: "BK", jam: "14.30 - 15.10"),
@@ -175,9 +175,12 @@ class KehadiranViewmodel extends ChangeNotifier {
       final data = jsonDecode(response.body);
 
       if (response.statusCode == 200) {
+        // --- TAMBAHAN: TANGKAP PESAN SUKSES & INFO POIN DARI LARAVEL ---
+        _errorMessage = data['message']; // Ini akan berisi "Absen Berhasil! Tepat waktu! +10 Poin..."
+        notifyListeners();
         return true;
       } else {
-        // Menangkap pesan "Anda bukan siswa di kelas ini!" dari Laravel
+        // Menangkap pesan error dari Laravel
         _errorMessage = data['message'] ?? "Terjadi kesalahan";
         notifyListeners();
         return null;
