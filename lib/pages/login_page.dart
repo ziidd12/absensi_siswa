@@ -140,7 +140,7 @@ class _LoginPageState extends State<LoginPage> {
                       TextField(
                         controller: _serialController,
                         decoration: InputDecoration(
-                          hintText: 'Username (NIS/NIP)',
+                          hintText: 'Email',
                           prefixIcon: const Icon(Icons.person),
                           border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                         ),

@@ -1,6 +1,10 @@
-import 'package:absensi_siswa/viewModels/history_poin_page.dart';
+import 'package:absensi_siswa/models/poin_history_model.dart';
 import 'package:flutter/material.dart';
-import 'package:absensi_siswa/service/api_service.dart';
+import 'package:provider/provider.dart';
+import 'package:intl/intl.dart';
+import 'package:absensi_siswa/viewmodels/gamifikasi_viewmodel.dart';
+import 'package:absensi_siswa/models/marketplace_model.dart';
+import 'package:absensi_siswa/models/user_token_model.dart';
 
 class StorePage extends StatefulWidget {
   const StorePage({super.key});
@@ -9,117 +13,76 @@ class StorePage extends StatefulWidget {
   State<StorePage> createState() => _StorePageState();
 }
 
-class _StorePageState extends State<StorePage> {
-  int saldoPoin = 0;
-  bool isLoadingPoin = true;
-  bool isLoadingItems = true;
-  List<StoreItem> listHadiah = [];
+class _StorePageState extends State<StorePage> with SingleTickerProviderStateMixin {
+  late TabController _tabController;
 
   @override
   void initState() {
     super.initState();
-    _loadDataAwal();
-  }
-
-  Future<void> _loadDataAwal() async {
-    setState(() {
-      isLoadingPoin = true;
-      isLoadingItems = true;
-    });
+    _tabController = TabController(length: 3, vsync: this);
     
-    await _fetchPoinSiswa();
-    await _fetchItemsStore();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<GamifikasiViewModel>().initDashboard();
+    });
   }
 
-  // 1. Ambil Poin (ID 1 keur ngetes Ahmad Zidan)
-  Future<void> _fetchPoinSiswa() async {
-    try {
-      final poinDariApi = await ApiService.getPointsStore(); 
-      setState(() {
-        saldoPoin = poinDariApi;
-        isLoadingPoin = false;
-      });
-    } catch (e) {
-      if (mounted) setState(() => isLoadingPoin = false);
-      print("❌ Gagal ambil poin: $e");
-    }
-  }
-
-  Future<void> _fetchItemsStore() async {
-    try {
-      // Urang pake 'var' heula meh teu lieur tipe datana
-      var data = await ApiService.fetchStoreItems(); 
-      setState(() {
-        listHadiah = data;
-        isLoadingItems = false;
-      });
-    } catch (e) {
-      if (mounted) setState(() => isLoadingItems = false);
-      print("❌ Gagal ambil items: $e");
-    }
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF2F4F7),
-      appBar: AppBar(
-  title: const Text('Store & Tukar Poin',
-      style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
-  backgroundColor: Colors.white,
-  elevation: 0,
-  centerTitle: true,
-  leading: IconButton(
-    icon: const Icon(Icons.arrow_back, color: Colors.black),
-    onPressed: () => Navigator.pop(context),
-  ),
-  // --- TAMBAHKEUN IEU DI HANDAP ---
-  actions: [
-    IconButton(
-      icon: const Icon(Icons.history, color: Colors.blueAccent),
-      onPressed: () {
-        // Ieu keur pindah ka halaman riwayat nu geus dijieun tadi
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (context) => const HistoryPoinPage()),
-        );
-      },
-    ),
-  ],
-),
-      body: RefreshIndicator(
-        onRefresh: _loadDataAwal,
-        child: SingleChildScrollView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildBalanceCard(),
-              const SizedBox(height: 25),
-              const Text('Item Tersedia',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 15),
+    final viewModel = context.watch<GamifikasiViewModel>();
 
-              isLoadingItems 
-                ? const Center(child: Padding(
-                    padding: EdgeInsets.only(top: 50),
-                    child: CircularProgressIndicator(),
-                  ))
-                : listHadiah.isEmpty 
-                  ? const Center(child: Padding(
-                      padding: EdgeInsets.only(top: 50),
-                      child: Text("Belum ada hadiah di database"),
-                    ))
-                  : ListView.builder(
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      itemCount: listHadiah.length,
-                      itemBuilder: (context, index) {
-                        final item = listHadiah[index];
-                        return _buildStoreItem(item);
-                      },
+    return Scaffold(
+      backgroundColor: const Color(0xFFF8FAFC),
+      appBar: AppBar(
+        title: const Text('Dompet Integritas',
+            style: TextStyle(color: Color(0xFF1E293B), fontWeight: FontWeight.bold)),
+        backgroundColor: Colors.white,
+        elevation: 0,
+        centerTitle: true,
+      ),
+      body: RefreshIndicator(
+        color: Colors.white,
+        backgroundColor: Colors.blueAccent,
+        onRefresh: () => viewModel.initDashboard(),
+        child: NestedScrollView(
+          headerSliverBuilder: (context, innerBoxIsScrolled) {
+            return [
+              SliverToBoxAdapter(
+                child: _buildHeroSection(viewModel),
+              ),
+              SliverOverlapAbsorber(
+                handle: NestedScrollView.sliverOverlapAbsorberHandleFor(context),
+                sliver: SliverPersistentHeader(
+                  pinned: true,
+                  delegate: _SliverAppBarDelegate(
+                    TabBar(
+                      controller: _tabController,
+                      labelColor: Colors.blueAccent,
+                      unselectedLabelColor: Colors.grey,
+                      indicatorColor: Colors.blueAccent,
+                      indicatorWeight: 3,
+                      tabs: const [
+                        Tab(text: "Riwayat"),
+                        Tab(text: "Marketplace"),
+                        Tab(text: "Inventory"),
+                      ],
                     ),
+                  ),
+                ),
+              ),
+            ];
+          },
+          body: TabBarView(
+            controller: _tabController,
+            children: [
+              _buildTabRiwayat(viewModel.pointHistory),
+              _buildTabMarketplace(viewModel.marketplaceItems, viewModel.balance, viewModel),
+              _buildTabInventory(viewModel.inventory),
             ],
           ),
         ),
@@ -127,131 +90,345 @@ class _StorePageState extends State<StorePage> {
     );
   }
 
-  Widget _buildBalanceCard() {
+  Widget _buildHeroSection(GamifikasiViewModel viewModel) {
     return Container(
-      padding: const EdgeInsets.all(20),
+      width: double.infinity,
+      margin: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          colors: [Colors.blueAccent, Colors.lightBlue],
+          colors: [Color(0xFF1E40AF), Color(0xFF3B82F6)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.blueAccent.withOpacity(0.3),
+            blurRadius: 15,
+            offset: const Offset(0, 8),
+          )
+        ],
       ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text('Saldo Poin Absen',
-                  style: TextStyle(color: Colors.white70, fontSize: 14)),
-              const SizedBox(height: 5),
-              isLoadingPoin 
-                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                : Text('$saldoPoin Poin',
-                    style: const TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.bold)),
-            ],
+          const Text('SALDO POIN PRESTASI',
+              style: TextStyle(color: Colors.white70, fontSize: 12, letterSpacing: 1)),
+          const SizedBox(height: 5),
+          Text(
+            '${viewModel.balance} Pts',
+            style: const TextStyle(color: Colors.white, fontSize: 36, fontWeight: FontWeight.bold),
           ),
-          const Icon(Icons.shopping_cart_checkout, color: Colors.white, size: 40),
+          const SizedBox(height: 20),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.15),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.verified, color: Colors.amber, size: 18),
+                const SizedBox(width: 8),
+                Text(
+                  'Level: ${viewModel.userLevel}',
+                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildStoreItem(StoreItem item) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 15),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-      child: ListTile(
-        leading: CircleAvatar(
-          backgroundColor: _getColorData(item.warna).withOpacity(0.1),
-          child: Icon(_getIconData(item.icon), color: _getColorData(item.warna)),
-        ),
-        title: Text(item.namaItem, style: const TextStyle(fontWeight: FontWeight.bold)),
-        subtitle: Text("${item.hargaPoin} Poin", 
-            style: const TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.w600)),
-        trailing: ElevatedButton(
-  onPressed: isProcessingRedeem ? null : () => _handleTukar(item),
-  style: ElevatedButton.styleFrom(
-    backgroundColor: Colors.blueAccent, 
-    shape: const StadiumBorder()
-  ),
-  child: isProcessingRedeem 
-    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-    : const Text('Tukar', style: TextStyle(color: Colors.white)),
-),
+  // ===================== TAB-TAB KONTEN =====================
+
+  // ===================== TAB 1: RIWAYAT MUTASI =====================
+  Widget _buildTabRiwayat(List<PointLedger> history) {
+    return Builder(builder: (context) {
+      return CustomScrollView(
+        // key ini penting agar posisi scroll tidak hilang saat pindah tab
+        key: const PageStorageKey<String>('riwayat_tab'), 
+        slivers: [
+          SliverOverlapInjector(handle: NestedScrollView.sliverOverlapAbsorberHandleFor(context)),
+          
+          if (history.isEmpty)
+            SliverFillRemaining(
+              hasScrollBody: false,
+              child: _buildEmptyState(Icons.history, "Belum ada riwayat mutasi poin."),
+            )
+          else
+            SliverPadding(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+              sliver: SliverList(
+                delegate: SliverChildBuilderDelegate(
+                  (context, index) {
+                    final log = history[index];
+                    
+                    // Logic: EARN = Hijau, Selain itu (SPEND/PENALTY) = Merah
+                    final bool isEarn = log.transactionType.toUpperCase() == 'EARN';
+                    
+                    return _buildRiwayatItem(log, isEarn);
+                  },
+                  childCount: history.length,
+                ),
+              ),
+            ),
+        ],
+      );
+    });
+  }
+
+  Widget _buildRiwayatItem(PointLedger log, bool isEarn) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white, 
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.03), 
+            blurRadius: 10,
+            offset: const Offset(0, 4)
+          )
+        ],
+      ),
+      child: Row(
+        children: [
+          // Icon Dinamis
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: isEarn ? Colors.green.withOpacity(0.1) : Colors.red.withOpacity(0.1),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              isEarn ? Icons.add_rounded : Icons.remove_rounded, 
+              color: isEarn ? Colors.green : Colors.red,
+              size: 20,
+            ),
+          ),
+          const SizedBox(width: 15),
+          // Deskripsi
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start, 
+              children: [
+                Text(
+                  log.description, 
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF1E293B)),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  DateFormat('dd MMM yyyy, HH:mm').format(log.createdAt), 
+                  style: TextStyle(color: Colors.grey.shade500, fontSize: 12)
+                ),
+              ]
+            ),
+          ),
+          // Nominal Poin
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                '${isEarn ? '+' : ''}${log.amount}', 
+                style: TextStyle(
+                  fontWeight: FontWeight.bold, 
+                  fontSize: 15,
+                  color: isEarn ? Colors.green : Colors.red
+                )
+              ),
+              const SizedBox(height: 2),
+              Text(
+                '${log.currentBalance} Pts',
+                style: TextStyle(color: Colors.grey.shade400, fontSize: 10),
+              )
+            ],
+          ),
+        ],
       ),
     );
   }
 
-  // Tambahkeun variabel ieu di luhur (di jero State)
-bool isProcessingRedeem = false;
-
-void _handleTukar(StoreItem item) async {
-  // Mun keur proses, tong dibere asup
-  if (isProcessingRedeem) return;
-
-  setState(() => isProcessingRedeem = true);
-
-  try {
-    final response = await ApiService.postRedeem(item.id);
-    
-    // Matikan loading sanggeus dapet jawaban
-    setState(() => isProcessingRedeem = false);
-
-    if (response['status'] == 'success') {
-      _showSimpleSnackBar(response['message'], Colors.green);
-      // Update saldo poin di layar sacara otomatis
-      setState(() {
-        saldoPoin = response['sisa_poin'];
-      });
-    } 
-    else if (response['status'] == 'has_token') {
-      _showSimpleSnackBar(response['message'], Colors.orange);
-    } 
-    else {
-      _showSimpleSnackBar(response['message'], Colors.red);
-    }
-
-  } catch (e) {
-    setState(() => isProcessingRedeem = false);
-    _showSimpleSnackBar("Gagal terhubung ke server. Pastikan koneksi aktif.", Colors.red);
+  Widget _buildTabMarketplace(List<FlexibilityItem> items, int currentBalance, GamifikasiViewModel viewModel) {
+    return Builder(builder: (context) {
+      return CustomScrollView(
+        slivers: [
+          SliverOverlapInjector(handle: NestedScrollView.sliverOverlapAbsorberHandleFor(context)),
+          if (items.isEmpty)
+            SliverFillRemaining(child: _buildEmptyState(Icons.shopping_bag_outlined, "Belum ada item di marketplace."))
+          else
+            SliverPadding(
+              padding: const EdgeInsets.all(20),
+              sliver: SliverGrid(
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 2, crossAxisSpacing: 15, mainAxisSpacing: 15, childAspectRatio: 0.75,
+                ),
+                delegate: SliverChildBuilderDelegate(
+                  (context, index) => _buildMarketItem(items[index], currentBalance, viewModel),
+                  childCount: items.length,
+                ),
+              ),
+            ),
+        ],
+      );
+    });
   }
-}
 
-// Fungsi Notifikasi nu Sopan
-void _showSimpleSnackBar(String pesan, Color warna) {
-  ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(
-      content: Text(
-        pesan, 
-        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w500)
+  Widget _buildTabInventory(List<UserToken> inventory) {
+    return Builder(builder: (context) {
+      return CustomScrollView(
+        slivers: [
+          SliverOverlapInjector(handle: NestedScrollView.sliverOverlapAbsorberHandleFor(context)),
+          if (inventory.isEmpty)
+            SliverFillRemaining(child: _buildEmptyState(Icons.backpack_outlined, "Kamu belum memiliki token."))
+          else
+            SliverPadding(
+              padding: const EdgeInsets.all(20),
+              sliver: SliverList(
+                delegate: SliverChildBuilderDelegate(
+                  (context, index) => _buildInventoryItem(inventory[index]),
+                  childCount: inventory.length,
+                ),
+              ),
+            ),
+        ],
+      );
+    });
+  }
+
+  // ===================== ATOM WIDGETS =====================
+
+  Widget _buildMarketItem(FlexibilityItem item, int balance, GamifikasiViewModel vm) {
+    bool canRedeem = balance >= item.pointCost;
+    return Container(
+      decoration: BoxDecoration(
+          color: Colors.white, 
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10)]
       ),
-      backgroundColor: warna,
-      behavior: SnackBarBehavior.floating,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-      duration: const Duration(seconds: 3),
-    ),
-  );
-}
-}
-
-  IconData _getIconData(String iconName) {
-    switch (iconName.toLowerCase()) {
-      case 'fastfood': return Icons.fastfood_rounded;
-      case 'edit': return Icons.edit_note_rounded;
-      case 'shirt': return Icons.checkroom_rounded;
-      default: return Icons.card_giftcard_rounded;
-    }
+      child: Column(children: [
+        Expanded(child: Icon(Icons.confirmation_number_rounded, color: Colors.blueAccent.withOpacity(0.5), size: 40)),
+        Padding(padding: const EdgeInsets.all(12), child: Column(children: [
+          Text(item.itemName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12), maxLines: 1, overflow: TextOverflow.ellipsis),
+          Text('${item.pointCost} Pts', style: const TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 8),
+          SizedBox(width: double.infinity, child: ElevatedButton(
+            style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.blueAccent, 
+                disabledBackgroundColor: Colors.grey.shade100,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                elevation: 0,
+            ),
+            onPressed: canRedeem && !vm.isLoading ? () => _confirmRedeem(context, item, vm) : null,
+            child: vm.isLoading 
+                ? const SizedBox(width: 15, height: 15, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                : const Text('Tukar', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+          ))
+        ]))
+      ]),
+    );
   }
 
-  Color _getColorData(String colorName) {
-    switch (colorName.toLowerCase()) {
-      case 'orange': return Colors.orange;
-      case 'green': return Colors.green;
-      case 'purple': return Colors.purple;
-      case 'red': return Colors.red;
-      default: return Colors.blueAccent;
-    }
+  Widget _buildInventoryItem(UserToken token) {
+    bool isAvailable = token.status == 'AVAILABLE';
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+          color: Colors.white, 
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10)]
+      ),
+      child: Row(children: [
+        Icon(Icons.stars, color: isAvailable ? Colors.amber : Colors.grey),
+        const SizedBox(width: 15),
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(token.item.itemName, style: const TextStyle(fontWeight: FontWeight.bold)),
+          Text(isAvailable ? 'Status: Aktif' : 'Status: Sudah Digunakan', style: TextStyle(color: isAvailable ? Colors.blue : Colors.grey, fontSize: 12)),
+        ])),
+      ]),
+    );
   }
+
+  Widget _buildEmptyState(IconData icon, String msg) {
+    return Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+      Icon(icon, size: 50, color: Colors.grey.shade300),
+      const SizedBox(height: 10),
+      Text(msg, style: const TextStyle(color: Colors.grey)),
+    ]));
+  }
+
+  // ===================== LOGIKA KONFIRMASI & REDEEM =====================
+
+  void _confirmRedeem(BuildContext context, FlexibilityItem item, GamifikasiViewModel vm) {
+    showDialog(
+      context: context,
+      barrierDismissible: !vm.isLoading, // Jangan biarkan tutup dialog saat loading
+      builder: (context) {
+        // Kita gunakan StatefulWidget di dalam dialog agar tombol loading bisa update
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              title: const Text("Konfirmasi Tukar"),
+              content: Text("Tukar ${item.pointCost} poin untuk '${item.itemName}'?"),
+              actions: [
+                TextButton(
+                  onPressed: vm.isLoading ? null : () => Navigator.pop(context), 
+                  child: const Text("Batal", style: TextStyle(color: Colors.grey))
+                ),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.blueAccent,
+                    shape: const StadiumBorder(),
+                    elevation: 0
+                  ),
+                  onPressed: vm.isLoading ? null : () async {
+                    // Jalankan redeem
+                    bool sukses = await vm.redeemToken(item.id);
+                    
+                    if (context.mounted) {
+                      Navigator.pop(context); // Tutup dialog
+                      
+                      // Tampilkan Feedback Snackbar
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(vm.errorMessage ?? (sukses ? "Berhasil ditukarkan!" : "Gagal")),
+                          backgroundColor: sukses ? Colors.green : Colors.red,
+                          behavior: SnackBarBehavior.floating,
+                          margin: const EdgeInsets.all(20),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                      );
+                    }
+                  },
+                  child: vm.isLoading 
+                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                    : const Text("Ya, Tukar", style: TextStyle(color: Colors.white)),
+                ),
+              ],
+            );
+          }
+        );
+      },
+    );
+  }
+}
+
+class _SliverAppBarDelegate extends SliverPersistentHeaderDelegate {
+  _SliverAppBarDelegate(this._tabBar);
+  final TabBar _tabBar;
+  @override double get minExtent => _tabBar.preferredSize.height;
+  @override double get maxExtent => _tabBar.preferredSize.height;
+  @override Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) {
+    return Container(color: Colors.white, child: _tabBar);
+  }
+  @override bool shouldRebuild(_SliverAppBarDelegate oldDelegate) => false;
+}

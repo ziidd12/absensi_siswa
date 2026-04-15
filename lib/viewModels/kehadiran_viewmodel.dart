@@ -1,13 +1,12 @@
 import 'dart:convert';
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 import 'package:absensi_siswa/models/attendance_scan_model.dart';
 import 'package:absensi_siswa/models/attendance_session_model.dart';
-import 'package:absensi_siswa/service/api_service.dart'; // Sesuaikan folder service/services
+import 'package:absensi_siswa/service/api_service.dart'; 
 import 'package:absensi_siswa/utils/token_storage.dart';
 
-// --- MODEL SISWA ---
+// --- MODEL SISWA (LOKAL UNTUK UI GURU) ---
 class Siswa {
   final int id;
   final String nama;
@@ -31,7 +30,7 @@ class Siswa {
   }
 }
 
-// --- MODEL PELAJARAN ---
+// --- MODEL PELAJARAN (DUMMY/LOKAL) ---
 class Pelajaran {
   final String nama;
   final String jam;
@@ -41,34 +40,30 @@ class Pelajaran {
 }
 
 class KehadiranViewmodel extends ChangeNotifier {
-  // 1. Inisialisasi ApiService agar tidak Error "isn't defined"
-  final ApiService _apiService = ApiService();
-
   bool _isLoading = false;
   bool get isLoading => _isLoading;
 
-  // 2. Definisi variabel ErrorMessage dengan benar
   String? _errorMessage;
   String? get errorMessage => _errorMessage;
 
   List<dynamic> _riwayatReal = [];
   List<dynamic> get riwayatReal => _riwayatReal;
   
-  // Setter untuk mempermudah update error dari luar/dalam
+  // Setter untuk error message
   set errorMessage(String? value) {
     _errorMessage = value;
     notifyListeners();
   }
 
-  attendanceSessionModel? _sessionData;
-  attendanceSessionModel? get sessionData => _sessionData;
+  // Gunakan PascalCase sesuai model terbaru
+  AttendanceSessionModel? _sessionData;
+  AttendanceSessionModel? get sessionData => _sessionData;
 
-  // Data Dummy untuk UI Siswa (Bisa kamu hapus jika nanti sudah pakai API Jadwal)
+  // Data Jadwal Dummy untuk UI Siswa
   List<Pelajaran> _jadwalSiswa = [
-    Pelajaran(nama: "Matematika", jam: "20:10 - 21:10"),
-    Pelajaran(nama: "B. Indonesia", jam: "09.25 - 11.25"),
-    Pelajaran(nama: "Konsentrasi RPL", jam: "12.30 - 14.30"),
-    Pelajaran(nama: "BK", jam: "14.30 - 15.10"),
+    Pelajaran(nama: "Matematika", jam: "07:15 - 09:15"),
+    Pelajaran(nama: "B. Indonesia", jam: "09:25 - 11:25"),
+    Pelajaran(nama: "Konsentrasi RPL", jam: "12:30 - 14:30"),
   ];
   List<Pelajaran> get jadwalSiswa => _jadwalSiswa;
 
@@ -78,25 +73,17 @@ class KehadiranViewmodel extends ChangeNotifier {
 
   List<Siswa> get daftarSiswa => _searchQuery.isEmpty ? _daftarSiswa : _filteredSiswa;
 
+  // ===================== FUNGSI RIWAYAT (SISWA) =====================
   Future<void> fetchRiwayatSiswa() async {
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
 
     try {
-      final token = await TokenStorage.getToken();
-      final response = await http.get(
-        Uri.parse("${ApiService.baseUrl}/history-siswa"),
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Accept': 'application/json',
-          'ngrok-skip-browser-warning': 'true',
-        },
-      );
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        _riwayatReal = data['data']; // 'data' berasal dari return JSON Laravel
+      // Menggunakan endpoint yang sudah disesuaikan di Laravel/API
+      final result = await ApiService.get('attendance/history');
+      if (result['status'] == 'success') {
+        _riwayatReal = result['data'];
       } else {
         _errorMessage = "Gagal mengambil riwayat";
       }
@@ -121,47 +108,25 @@ class KehadiranViewmodel extends ChangeNotifier {
     notifyListeners();
   }
 
-  // ===================== FUNGSI AMBIL DATA SISWA (GURU) =====================
+  // ===================== FUNGSI AMBIL DAFTAR SISWA (GURU) =====================
   Future<void> fetchSiswaByKelas(String namaKelas, {int? jadwalId}) async {
     _isLoading = true;
     _errorMessage = null; 
     _daftarSiswa = []; 
     _filteredSiswa = [];
-    _searchQuery = ""; 
     notifyListeners();
 
     try {
-      final token = await TokenStorage.getToken();
+      String endpoint = 'siswa-by-kelas/${Uri.encodeComponent(namaKelas)}';
+      if (jadwalId != null) endpoint += "?jadwal_id=$jadwalId";
       
-      String url = "${ApiService.baseUrl}/siswa-by-kelas/${Uri.encodeComponent(namaKelas)}";
-      if (jadwalId != null) {
-        url += "?jadwal_id=$jadwalId";
-      }
-      
-      final uri = Uri.parse(url);
-      print("🔗 REQUEST KE: $uri");
+      final result = await ApiService.get(endpoint);
 
-      final response = await http.get(
-        uri, 
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
-          'Accept': 'application/json',
-          'ngrok-skip-browser-warning': 'true', 
-        },
-      ).timeout(const Duration(seconds: 15));
-
-      if (response.statusCode == 200) {
-        final Map<String, dynamic> responseBody = json.decode(response.body);
-        if (responseBody.containsKey('data')) {
-          final List<dynamic> data = responseBody['data'];
-          _daftarSiswa = data.map((item) => Siswa.fromJson(item)).toList();
-        }
-      } else if (response.statusCode == 404) {
-        _errorMessage = "Kelas '$namaKelas' tidak ditemukan.";
+      if (result['status'] == 'success') {
+        final List<dynamic> data = result['data'];
+        _daftarSiswa = data.map((item) => Siswa.fromJson(item)).toList();
       } else {
-        final errJson = json.decode(response.body);
-        _errorMessage = errJson['message'] ?? "Server Error (${response.statusCode})";
+        _errorMessage = result['message'] ?? "Gagal memuat data siswa";
       }
     } catch (e) {
       _errorMessage = "Koneksi bermasalah: $e";
@@ -197,29 +162,26 @@ class KehadiranViewmodel extends ChangeNotifier {
     }
   }
 
-  // ===================== FUNGSI SCAN QR (SISWA) =====================
-  Future<bool?> scanQR(String token, double lat, double long, String mapel) async {
-    _errorMessage = null; // Reset error sebelum mulai scan
+  // ===================== FUNGSI SCAN QR (SISWA) - TANPA LOKASI =====================
+  Future<AttendanceScanModel?> scanQR(String token) async {
+    _errorMessage = null;
     notifyListeners();
 
     try {
-      // Memanggil fungsi postAbsensi dari ApiService yang sudah kita inisialisasi
-      final response = await _apiService.postAbsensi(token, lat, long);
-      final data = jsonDecode(response.body);
-
-      if (response.statusCode == 200) {
-        // --- TAMBAHAN: TANGKAP PESAN SUKSES & INFO POIN DARI LARAVEL ---
-        _errorMessage = data['message']; // Ini akan berisi "Absen Berhasil! Tepat waktu! +10 Poin..."
-        notifyListeners();
-        return true;
-      } else {
-        // Menangkap pesan error dari Laravel
-        _errorMessage = data['message'] ?? "Terjadi kesalahan";
-        notifyListeners();
-        return null;
+      // Memanggil ApiService.scanQR yang sudah kita update (hanya kirim token)
+      final result = await ApiService.scanQR(token);
+      
+      if (result != null) {
+        if (result.status == 'success') {
+          _errorMessage = result.message; // Menyimpan pesan sukses/info poin
+        } else {
+          _errorMessage = result.message; // Menyimpan pesan error dari Laravel
+        }
+        return result;
       }
+      return null;
     } catch (e) {
-      _errorMessage = "Koneksi ke server bermasalah, Lek!";
+      _errorMessage = "Terjadi kendala saat menghubungi server.";
       notifyListeners();
       return null;
     }
@@ -232,7 +194,9 @@ class KehadiranViewmodel extends ChangeNotifier {
     notifyListeners();
     
     try {
+      // Mengirimkan jadwalId dan list _daftarSiswa ke ApiService
       bool sukses = await ApiService.saveManualAttendance(jadwalId, _daftarSiswa);
+      if (!sukses) _errorMessage = "Gagal menyimpan absensi manual";
       return sukses;
     } catch (e) {
       _errorMessage = "Gagal menyimpan ke server: $e";

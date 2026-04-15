@@ -1,3 +1,4 @@
+import 'package:absensi_siswa/viewmodels/gamifikasi_viewmodel.dart';
 import 'package:absensi_siswa/viewmodels/jadwal_siswa.dart';
 import 'package:absensi_siswa/viewmodels/score_viewmodel.dart';
 import 'package:flutter/material.dart';
@@ -34,6 +35,7 @@ void main() async {
         ChangeNotifierProvider(create: (_) => AssessmentViewModel()),
         ChangeNotifierProvider(create: (_) => JadwalViewModel()),
         ChangeNotifierProvider(create: (_) => ScoreViewModel()),
+        ChangeNotifierProvider(create: (_) => GamifikasiViewModel()),
       ],
       child: const MyApp(),
     ),

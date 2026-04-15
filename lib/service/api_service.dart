@@ -4,7 +4,9 @@ import 'package:absensi_siswa/models/assessment_category_model.dart';
 import 'package:absensi_siswa/models/assessment_model.dart';
 import 'package:absensi_siswa/models/assessment_report_model.dart';
 import 'package:absensi_siswa/models/jadwal_model.dart';
+import 'package:absensi_siswa/models/marketplace_model.dart';
 import 'package:absensi_siswa/models/poin_history_model.dart';
+import 'package:absensi_siswa/models/user_token_model.dart';
 import 'package:http/http.dart' as http;
 import 'package:absensi_siswa/models/attendance_scan_model.dart';
 import 'package:absensi_siswa/models/attendance_session_model.dart';
@@ -43,7 +45,7 @@ class StoreItem {
 
 class ApiService {
   // Ganti https menjadi http
-  static const String baseUrl =      'https://calculous-unsculptured-ngan.ngrok-free.dev/api';
+  static const String baseUrl = 'https://cod-active-bluejay.ngrok-free.app/api';
 
   // --- HELPER HEADERS ---
   static Future<Map<String, String>> _getHeaders() async {
@@ -85,9 +87,7 @@ class ApiService {
 
   static Future<dynamic> get(String endpoint) async {
     final headers = await _getHeaders();
-
-    // Ini print buat kita pantau di terminal biar ketahuan tokennya masuk gak
-    print("🚀 Request ke: $endpoint | Token: ${headers['Authorization']}");
+    print("🚀 GET: $baseUrl/$endpoint");
 
     final response = await http
         .get(Uri.parse('$baseUrl/$endpoint'), headers: headers)
@@ -96,22 +96,16 @@ class ApiService {
     if (response.statusCode >= 200 && response.statusCode < 300) {
       return jsonDecode(response.body);
     } else {
-      // Ini penting biar maneh tau error aslinya dari Laravel apa
-      print(
-        "❌ API GET ERROR [$endpoint]: ${response.statusCode} - ${response.body}",
-      );
-      throw Exception(
-        'Gagal mengambil data dari $endpoint (Status: ${response.statusCode})',
-      );
+      print("❌ GET ERROR [$endpoint]: ${response.statusCode} - ${response.body}");
+      throw Exception('Gagal memuat data (Status: ${response.statusCode})');
     }
   }
 
-  // --- FUNGSI POST UMUM ---
-  static Future<Map<String, dynamic>> post(
-    String endpoint,
-    Map<String, dynamic> data,
-  ) async {
+  // --- CORE POST REQUEST ---
+  static Future<Map<String, dynamic>> post(String endpoint, Map<String, dynamic> data) async {
     final headers = await _getHeaders();
+    print("🚀 POST: $baseUrl/$endpoint | Body: $data");
+
     final response = await http
         .post(
           Uri.parse('$baseUrl/$endpoint'),
@@ -123,12 +117,9 @@ class ApiService {
     if (response.statusCode >= 200 && response.statusCode < 300) {
       return jsonDecode(response.body);
     } else {
-      print(
-        "❌ API POST ERROR [$endpoint]: ${response.statusCode} - ${response.body}",
-      );
-      throw Exception(
-        'Gagal mengirim data ke $endpoint (Status: ${response.statusCode})',
-      );
+      print("❌ POST ERROR [$endpoint]: ${response.statusCode} - ${response.body}");
+      // Kembalikan body agar pesan error dari Laravel (misal: "Poin Kurang") bisa dibaca
+      return jsonDecode(response.body);
     }
   }
 
@@ -147,7 +138,7 @@ class ApiService {
     try {
       // Memanggil endpoint scoring/summary-student
       final result = await get('scoring/summary-student');
-      
+
       // Jika Laravel mengembalikan List dalam key 'data', kita ambil index pertama
       if (result['data'] is List && result['data'].isNotEmpty) {
         return result['data'][0];
@@ -158,102 +149,54 @@ class ApiService {
       return {};
     }
   }
-
+// --------------------------------------------------------------------------
+  // --- SISWA & ATTENDANCE METHODS (TANPA LOKASI) ---
   // --------------------------------------------------------------------------
-  // --- SISWA & ATTENDANCE METHODS ---
-  // --------------------------------------------------------------------------
 
-  static Future<bool> saveManualAttendance(
-    int jadwalId,
-    List<dynamic> daftarSiswa,
-  ) async {
-    final headers = await _getHeaders();
+  static Future<AttendanceSessionModel?> createAttendanceSession(int jadwalId) async {
+    try {
+      final result = await post('attendance/session', {'jadwal_id': jadwalId});
+      return AttendanceSessionModel.fromJson(result);
+    } catch (e) {
+      print('❌ Error createAttendanceSession: $e');
+      return null;
+    }
+  }
 
-    final body = jsonEncode({
-      'jadwal_id': jadwalId,
-      'absensi': daftarSiswa
-          .map(
-            (s) => {
-              'siswa_id': s.id,
-              'status': (s.status == 'Belum' || s.status == null)
-                  ? 'H'
-                  : s.status,
-            },
-          )
-          .toList(),
+  static Future<AttendanceScanModel?> scanQR(String tokenQr) async {
+    try {
+      // Hanya mengirimkan token_qr ke server
+      final result = await post('attendance/scan', {
+        'token_qr': tokenQr,
+      });
+      return AttendanceScanModel.fromJson(result);
+    } catch (e) {
+      print('❌ Error scanQR: $e');
+      return null;
+    }
+  }
+
+  // Fungsi cadangan jika masih menggunakan instance method (Tanpa Lat/Long)
+  Future<Map<String, dynamic>> postAbsensi(String tokenQr) async {
+    return await ApiService.post('attendance/scan', {
+      'token_qr': tokenQr,
     });
-
-    final response = await http
-        .post(
-          Uri.parse('$baseUrl/attendance/manual'),
-          headers: headers,
-          body: body,
-        )
-        .timeout(const Duration(seconds: 15));
-
-    print("📤 SAVE MANUAL [${response.statusCode}]: ${response.body}");
-    return response.statusCode == 200 || response.statusCode == 201;
   }
 
-  static Future<attendanceSessionModel?> createAttendanceSession(
-    int jadwalId,
-  ) async {
-    final result = await _handleApiRequest(
-      http.post(
-        Uri.parse('$baseUrl/attendance/session'),
-        headers: await _getHeaders(),
-        body: jsonEncode({'jadwal_id': jadwalId}),
-      ),
-      'membuat sesi',
-      'attendance/session',
-    );
-
-    if (result != null) return attendanceSessionModel.fromJson(result);
-    return null;
-  }
-
-  static Future<attendanceScanModel?> scanQR(
-    String tokenQr,
-    double lat,
-    double lng,
-  ) async {
-    final result = await _handleApiRequest(
-      http.post(
-        Uri.parse('$baseUrl/attendance/scan'),
-        headers: await _getHeaders(),
-        body: jsonEncode({
-          'token_qr': tokenQr,
-          'latitude': lat,
-          'longitude': lng,
-        }),
-      ),
-      'melakukan scan',
-      'attendance/scan',
-    );
-
-    if (result != null) return attendanceScanModel.fromJson(result);
-    return null;
-  }
-
-  Future<http.Response> postAbsensi(
-    String tokenQr,
-    double lat,
-    double long,
-  ) async {
-    final headers = await _getHeaders();
-    final url = Uri.parse('$baseUrl/attendance/scan');
-
-    return await http
-        .post(
-          url,
-          headers: headers,
-          body: jsonEncode({
-            'token_qr': tokenQr,
-            'lat_siswa': lat,
-            'long_siswa': long,
-          }),
-        )
-        .timeout(const Duration(seconds: 15));
+  static Future<bool> saveManualAttendance(int jadwalId, List<dynamic> daftarSiswa) async {
+    try {
+      final result = await post('attendance/manual', {
+        'jadwal_id': jadwalId,
+        'absensi': daftarSiswa.map((s) => {
+          'siswa_id': s.id,
+          'status': (s.status == 'Belum' || s.status == null) ? 'H' : s.status,
+        }).toList(),
+      });
+      return result['status'] == 'success';
+    } catch (e) {
+      print("❌ SAVE MANUAL ERROR: $e");
+      return false;
+    }
   }
 
   // --------------------------------------------------------------------------
@@ -428,50 +371,12 @@ class ApiService {
     }
   }
 
-  // --------------------------------------------------------------------------
-  // --- FITUR POIN STORE BARU ---
-  // --------------------------------------------------------------------------
-
-  // --- FITUR POIN STORE BARU ---
-  // --- UPDATE: Hapus parameter siswaId biar gak bocor ---
- static Future<int> getPointsStore() async {
-    try {
-      // Endpoint disesuaikan dengan perubahan di Laravel (tanpa ID di ujung)
-      final result = await get('siswa/store/points'); 
-      if (result != null && result['status'] == 'success') {
-        return result['points'] ?? 0;
-      }
-      return 0;
-    } catch (e) {
-      print('❌ Error getPointsStore: $e');
-      return 0;
-    }
-  }
-
-  static Future<List<StoreItem>> fetchStoreItems() async {
-    try {
-      final result = await get('store-items');
-      List<dynamic> data;
-      if (result is Map && result.containsKey('data')) {
-        data = result['data'];
-      } else if (result is List) {
-        data = result;
-      } else {
-        return [];
-      }
-      return data.map((e) => StoreItem.fromJson(e)).toList();
-    } catch (e) {
-      print('❌ Error fetchStoreItems: $e');
-      return [];
-    }
-  }
-
   // --- JADWAL METHODS ---
   // --- JADWAL METHODS ---
   static Future<List<JadwalModel>> getJadwalHariIni() async {
     try {
       final result = await get('jadwal-hari-ini');
-      
+
       List<dynamic> data;
       if (result is Map && result.containsKey('data')) {
         data = result['data'];
@@ -488,57 +393,59 @@ class ApiService {
     }
   }
 
-  // --- POIN HISTORY METHOD (FIXED & CLEAN) ---
-  static Future<List<PoinHistory>> fetchPoinHistory() async {
+  // --------------------------------------------------------------------------
+  // --- FITUR GAMIFIKASI (DOMPET INTEGRITAS) ---
+  // --------------------------------------------------------------------------
+
+  /// TAB 2 & HERO: Ambil Saldo & List Item Marketplace
+  static Future<MarketplaceResponse?> fetchMarketplace() async {
     try {
-      // Urang paké helper 'get' meh otomatis nanganana token & baseUrl
-      final result = await get('poin/history'); 
-
-      List<dynamic> data;
-      if (result is Map && result.containsKey('data')) {
-        data = result['data'];
-      } else if (result is List) {
-        data = result;
-      } else {
-        return [];
-      }
-
-      // Pastikeun ngaran Model manéh téh 'PoinHistory' (lain PoinHistoryModel)
-      return data.map((e) => PoinHistory.fromJson(e)).toList();
+      final result = await get('gamifikasi/marketplace');
+      return MarketplaceResponse.fromJson(result);
     } catch (e) {
-      print('❌ Error fetchPoinHistory: $e');
-      rethrow;
+      print('❌ Error fetchMarketplace: $e');
+      return null;
     }
   }
-  // --- FUNGSI ANYAR KEUR REDEEM ---
-  // --- FUNGSI REDEEM NU GEUS DIBENERKEUN ---
+
+  /// TAB 1: Riwayat Mutasi Poin (Ledger)
+  static Future<List<PointLedger>> fetchPointHistory() async {
+    try {
+      final result = await get('gamifikasi/history');
+      if (result['status'] == 'success') {
+        return (result['data'] as List)
+            .map((e) => PointLedger.fromJson(e))
+            .toList();
+      }
+      return [];
+    } catch (e) {
+      print('❌ Error fetchPointHistory: $e');
+      return [];
+    }
+  }
+
+  /// TAB 3: My Inventory (Token yang dimiliki)
+  static Future<List<UserToken>> fetchUserInventory() async {
+    try {
+      final result = await get('gamifikasi/inventory');
+      if (result['status'] == 'success') {
+        return (result['data'] as List)
+            .map((e) => UserToken.fromJson(e))
+            .toList();
+      }
+      return [];
+    } catch (e) {
+      print('❌ Error fetchUserInventory: $e');
+      return [];
+    }
+  }
+
+  /// ACTION: Tukar Poin (Redeem)
   static Future<Map<String, dynamic>> postRedeem(int itemId) async {
     try {
-      // 1. Ganti alamatna jadi 'redeem' wungkul meh akur jeung api.php
-      // 2. Helper 'post' biasana geus nanganana JSON & Token
-      final result = await post('redeem', {
-        'item_id': itemId,
-      });
-
-      // Mun result aya isina, langsung balikkeun
-      if (result != null) {
-        return result;
-      }
-      
-      return {'status': 'error', 'message': 'Respon server kosong'};
+      return await post('gamifikasi/redeem', {'item_id': itemId});
     } catch (e) {
-      // Di dieu urang kudu pinter. Mun 'e' eusina string JSON ti server (400),
-      // urang coba bongkar meh pesen "Poin Kurang" katingali.
-      print('❌ Error postRedeem: $e');
-      
-      // Ieu tips meh notifikasi "Poin Kurang" tetep muncul sanajan error 400
-      return {
-        'status': 'error', 
-        'message': e.toString().contains('400') 
-            ? 'Proses gagal. Pastikan poin cukup dan item belum dimiliki.' 
-            : 'Terjadi kendala koneksi ke server.'
-      };
+      return {'status': 'error', 'message': 'Gagal terhubung ke server'};
     }
   }
-
 }
