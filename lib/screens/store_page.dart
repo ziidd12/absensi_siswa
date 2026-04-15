@@ -1,3 +1,4 @@
+import 'package:absensi_siswa/viewModels/history_poin_page.dart';
 import 'package:flutter/material.dart';
 import 'package:absensi_siswa/service/api_service.dart';
 
@@ -12,7 +13,7 @@ class _StorePageState extends State<StorePage> {
   int saldoPoin = 0;
   bool isLoadingPoin = true;
   bool isLoadingItems = true;
-  List<StoreItem> listHadiah = []; // <--- Tempat nyimpen data dari DB
+  List<StoreItem> listHadiah = [];
 
   @override
   void initState() {
@@ -20,7 +21,6 @@ class _StorePageState extends State<StorePage> {
     _loadDataAwal();
   }
 
-  // Fungsi buat sikat semua data sekaligus
   Future<void> _loadDataAwal() async {
     setState(() {
       isLoadingPoin = true;
@@ -31,31 +31,31 @@ class _StorePageState extends State<StorePage> {
     await _fetchItemsStore();
   }
 
-  // 1. Ambil Poin
+  // 1. Ambil Poin (ID 1 keur ngetes Ahmad Zidan)
   Future<void> _fetchPoinSiswa() async {
     try {
-      final poinDariApi = await ApiService.getStorePoints(1); // Ngetes Ahmad Zidan
+      final poinDariApi = await ApiService.getPointsStore(); 
       setState(() {
         saldoPoin = poinDariApi;
         isLoadingPoin = false;
       });
     } catch (e) {
-      setState(() => isLoadingPoin = false);
-      print("Gagal ambil poin: $e");
+      if (mounted) setState(() => isLoadingPoin = false);
+      print("❌ Gagal ambil poin: $e");
     }
   }
 
-  // 2. Ambil Daftar Hadiah dari Database
   Future<void> _fetchItemsStore() async {
     try {
-      final items = await ApiService.getStoreItems();
+      // Urang pake 'var' heula meh teu lieur tipe datana
+      var data = await ApiService.fetchStoreItems(); 
       setState(() {
-        listHadiah = items;
+        listHadiah = data;
         isLoadingItems = false;
       });
     } catch (e) {
-      setState(() => isLoadingItems = false);
-      print("Gagal ambil items: $e");
+      if (mounted) setState(() => isLoadingItems = false);
+      print("❌ Gagal ambil items: $e");
     }
   }
 
@@ -64,45 +64,60 @@ class _StorePageState extends State<StorePage> {
     return Scaffold(
       backgroundColor: const Color(0xFFF2F4F7),
       appBar: AppBar(
-        title: const Text('Store & Tukar Poin',
-            style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
-        backgroundColor: Colors.white,
-        elevation: 0,
-        centerTitle: true,
-      ),
+  title: const Text('Store & Tukar Poin',
+      style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+  backgroundColor: Colors.white,
+  elevation: 0,
+  centerTitle: true,
+  leading: IconButton(
+    icon: const Icon(Icons.arrow_back, color: Colors.black),
+    onPressed: () => Navigator.pop(context),
+  ),
+  // --- TAMBAHKEUN IEU DI HANDAP ---
+  actions: [
+    IconButton(
+      icon: const Icon(Icons.history, color: Colors.blueAccent),
+      onPressed: () {
+        // Ieu keur pindah ka halaman riwayat nu geus dijieun tadi
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => const HistoryPoinPage()),
+        );
+      },
+    ),
+  ],
+),
       body: RefreshIndicator(
-        onRefresh: _loadDataAwal, // Tarik bawah buat refresh poin & barang
+        onRefresh: _loadDataAwal,
         child: SingleChildScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.all(20),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Card Saldo Poin
               _buildBalanceCard(),
-              
               const SizedBox(height: 25),
               const Text('Item Tersedia',
                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
               const SizedBox(height: 15),
 
-              // --- LOGIKA LIST ITEM DINAMIS ---
               isLoadingItems 
-                ? const Center(child: CircularProgressIndicator())
+                ? const Center(child: Padding(
+                    padding: EdgeInsets.only(top: 50),
+                    child: CircularProgressIndicator(),
+                  ))
                 : listHadiah.isEmpty 
-                  ? const Center(child: Text("Belum ada hadiah di database"))
+                  ? const Center(child: Padding(
+                      padding: EdgeInsets.only(top: 50),
+                      child: Text("Belum ada hadiah di database"),
+                    ))
                   : ListView.builder(
                       shrinkWrap: true,
                       physics: const NeverScrollableScrollPhysics(),
                       itemCount: listHadiah.length,
                       itemBuilder: (context, index) {
                         final item = listHadiah[index];
-                        return _buildStoreItem(
-                          item.namaItem, 
-                          "${item.hargaPoin} Poin",
-                          _getIconData(item.icon), 
-                          _getColorData(item.warna)
-                        );
+                        return _buildStoreItem(item);
                       },
                     ),
             ],
@@ -112,7 +127,6 @@ class _StorePageState extends State<StorePage> {
     );
   }
 
-  // Widget Card Saldo
   Widget _buildBalanceCard() {
     return Container(
       padding: const EdgeInsets.all(20),
@@ -135,7 +149,7 @@ class _StorePageState extends State<StorePage> {
               const SizedBox(height: 5),
               isLoadingPoin 
                 ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                : Text(saldoPoin.toString(),
+                : Text('$saldoPoin Poin',
                     style: const TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.bold)),
             ],
           ),
@@ -145,32 +159,86 @@ class _StorePageState extends State<StorePage> {
     );
   }
 
-  // Widget Item Store
-  Widget _buildStoreItem(String name, String price, IconData icon, Color color) {
+  Widget _buildStoreItem(StoreItem item) {
     return Card(
       margin: const EdgeInsets.only(bottom: 15),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
       child: ListTile(
         leading: CircleAvatar(
-          backgroundColor: color.withOpacity(0.1),
-          child: Icon(icon, color: color),
+          backgroundColor: _getColorData(item.warna).withOpacity(0.1),
+          child: Icon(_getIconData(item.icon), color: _getColorData(item.warna)),
         ),
-        title: Text(name, style: const TextStyle(fontWeight: FontWeight.bold)),
-        subtitle: Text(price, style: const TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.w600)),
+        title: Text(item.namaItem, style: const TextStyle(fontWeight: FontWeight.bold)),
+        subtitle: Text("${item.hargaPoin} Poin", 
+            style: const TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.w600)),
         trailing: ElevatedButton(
-          onPressed: () {
-            // Nanti di sini logika potong poin
-          },
-          style: ElevatedButton.styleFrom(backgroundColor: Colors.blueAccent, shape: const StadiumBorder()),
-          child: const Text('Tukar', style: TextStyle(color: Colors.white)),
-        ),
+  onPressed: isProcessingRedeem ? null : () => _handleTukar(item),
+  style: ElevatedButton.styleFrom(
+    backgroundColor: Colors.blueAccent, 
+    shape: const StadiumBorder()
+  ),
+  child: isProcessingRedeem 
+    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+    : const Text('Tukar', style: TextStyle(color: Colors.white)),
+),
       ),
     );
   }
 
-  // Helper buat konversi string icon dari DB ke IconData Flutter
+  // Tambahkeun variabel ieu di luhur (di jero State)
+bool isProcessingRedeem = false;
+
+void _handleTukar(StoreItem item) async {
+  // Mun keur proses, tong dibere asup
+  if (isProcessingRedeem) return;
+
+  setState(() => isProcessingRedeem = true);
+
+  try {
+    final response = await ApiService.postRedeem(item.id);
+    
+    // Matikan loading sanggeus dapet jawaban
+    setState(() => isProcessingRedeem = false);
+
+    if (response['status'] == 'success') {
+      _showSimpleSnackBar(response['message'], Colors.green);
+      // Update saldo poin di layar sacara otomatis
+      setState(() {
+        saldoPoin = response['sisa_poin'];
+      });
+    } 
+    else if (response['status'] == 'has_token') {
+      _showSimpleSnackBar(response['message'], Colors.orange);
+    } 
+    else {
+      _showSimpleSnackBar(response['message'], Colors.red);
+    }
+
+  } catch (e) {
+    setState(() => isProcessingRedeem = false);
+    _showSimpleSnackBar("Gagal terhubung ke server. Pastikan koneksi aktif.", Colors.red);
+  }
+}
+
+// Fungsi Notifikasi nu Sopan
+void _showSimpleSnackBar(String pesan, Color warna) {
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(
+      content: Text(
+        pesan, 
+        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w500)
+      ),
+      backgroundColor: warna,
+      behavior: SnackBarBehavior.floating,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      duration: const Duration(seconds: 3),
+    ),
+  );
+}
+}
+
   IconData _getIconData(String iconName) {
-    switch (iconName) {
+    switch (iconName.toLowerCase()) {
       case 'fastfood': return Icons.fastfood_rounded;
       case 'edit': return Icons.edit_note_rounded;
       case 'shirt': return Icons.checkroom_rounded;
@@ -178,13 +246,12 @@ class _StorePageState extends State<StorePage> {
     }
   }
 
-  // Helper buat konversi string warna dari DB ke Color Flutter
   Color _getColorData(String colorName) {
-    switch (colorName) {
+    switch (colorName.toLowerCase()) {
       case 'orange': return Colors.orange;
       case 'green': return Colors.green;
       case 'purple': return Colors.purple;
+      case 'red': return Colors.red;
       default: return Colors.blueAccent;
     }
   }
-}

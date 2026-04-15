@@ -4,6 +4,7 @@ import 'package:absensi_siswa/models/assessment_category_model.dart';
 import 'package:absensi_siswa/models/assessment_model.dart';
 import 'package:absensi_siswa/models/assessment_report_model.dart';
 import 'package:absensi_siswa/models/jadwal_model.dart';
+import 'package:absensi_siswa/models/poin_history_model.dart';
 import 'package:http/http.dart' as http;
 import 'package:absensi_siswa/models/attendance_scan_model.dart';
 import 'package:absensi_siswa/models/attendance_session_model.dart';
@@ -42,7 +43,7 @@ class StoreItem {
 
 class ApiService {
   // Ganti https menjadi http
-  static const String baseUrl = 'https://cod-active-bluejay.ngrok-free.app/api';
+  static const String baseUrl =      'https://calculous-unsculptured-ngan.ngrok-free.dev/api';
 
   // --- HELPER HEADERS ---
   static Future<Map<String, String>> _getHeaders() async {
@@ -431,25 +432,25 @@ class ApiService {
   // --- FITUR POIN STORE BARU ---
   // --------------------------------------------------------------------------
 
-  static Future<int> getStorePoints(int siswaId) async {
+  // --- FITUR POIN STORE BARU ---
+  // --- UPDATE: Hapus parameter siswaId biar gak bocor ---
+ static Future<int> getPointsStore() async {
     try {
-      final result = await get('siswa/store/points/$siswaId');
+      // Endpoint disesuaikan dengan perubahan di Laravel (tanpa ID di ujung)
+      final result = await get('siswa/store/points'); 
       if (result != null && result['status'] == 'success') {
         return result['points'] ?? 0;
       }
       return 0;
     } catch (e) {
-      print('❌ Error getStorePoints: $e');
+      print('❌ Error getPointsStore: $e');
       return 0;
     }
   }
 
-  // --- AMBIL DAFTAR ITEM STORE DARI DATABASE ---
-  static Future<List<StoreItem>> getStoreItems() async {
+  static Future<List<StoreItem>> fetchStoreItems() async {
     try {
       final result = await get('store-items');
-
-      // Biar aman baca JSON dari Laravel, mau ada wrapper 'data' atau gak
       List<dynamic> data;
       if (result is Map && result.containsKey('data')) {
         data = result['data'];
@@ -460,15 +461,15 @@ class ApiService {
       }
       return data.map((e) => StoreItem.fromJson(e)).toList();
     } catch (e) {
-      print('❌ Error getStoreItems: $e');
+      print('❌ Error fetchStoreItems: $e');
       return [];
     }
   }
 
   // --- JADWAL METHODS ---
+  // --- JADWAL METHODS ---
   static Future<List<JadwalModel>> getJadwalHariIni() async {
     try {
-      // Endpoint ini memanggil JadwalController@index yang sudah kita buat hybrid
       final result = await get('jadwal-hari-ini');
       
       List<dynamic> data;
@@ -486,4 +487,58 @@ class ApiService {
       rethrow;
     }
   }
+
+  // --- POIN HISTORY METHOD (FIXED & CLEAN) ---
+  static Future<List<PoinHistory>> fetchPoinHistory() async {
+    try {
+      // Urang paké helper 'get' meh otomatis nanganana token & baseUrl
+      final result = await get('poin/history'); 
+
+      List<dynamic> data;
+      if (result is Map && result.containsKey('data')) {
+        data = result['data'];
+      } else if (result is List) {
+        data = result;
+      } else {
+        return [];
+      }
+
+      // Pastikeun ngaran Model manéh téh 'PoinHistory' (lain PoinHistoryModel)
+      return data.map((e) => PoinHistory.fromJson(e)).toList();
+    } catch (e) {
+      print('❌ Error fetchPoinHistory: $e');
+      rethrow;
+    }
+  }
+  // --- FUNGSI ANYAR KEUR REDEEM ---
+  // --- FUNGSI REDEEM NU GEUS DIBENERKEUN ---
+  static Future<Map<String, dynamic>> postRedeem(int itemId) async {
+    try {
+      // 1. Ganti alamatna jadi 'redeem' wungkul meh akur jeung api.php
+      // 2. Helper 'post' biasana geus nanganana JSON & Token
+      final result = await post('redeem', {
+        'item_id': itemId,
+      });
+
+      // Mun result aya isina, langsung balikkeun
+      if (result != null) {
+        return result;
+      }
+      
+      return {'status': 'error', 'message': 'Respon server kosong'};
+    } catch (e) {
+      // Di dieu urang kudu pinter. Mun 'e' eusina string JSON ti server (400),
+      // urang coba bongkar meh pesen "Poin Kurang" katingali.
+      print('❌ Error postRedeem: $e');
+      
+      // Ieu tips meh notifikasi "Poin Kurang" tetep muncul sanajan error 400
+      return {
+        'status': 'error', 
+        'message': e.toString().contains('400') 
+            ? 'Proses gagal. Pastikan poin cukup dan item belum dimiliki.' 
+            : 'Terjadi kendala koneksi ke server.'
+      };
+    }
+  }
+
 }
